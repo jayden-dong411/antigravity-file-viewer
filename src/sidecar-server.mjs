@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { createReadStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -123,9 +124,15 @@ const STATIC_MIME = {
   '.otf': 'font/otf',
   '.pdf': 'application/pdf',
   '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
   '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg',
+  '.flac': 'audio/flac',
+  '.bmp': 'image/bmp',
 };
 
 const server = http.createServer(async (req, res) => {
@@ -167,13 +174,40 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const ext = path.extname(resolved).toLowerCase();
-      const buf = await fs.readFile(resolved);
+      const contentType = STATIC_MIME[ext] || 'application/octet-stream';
+      const total = stat.size;
+      const rangeHeader = req.headers.range;
+
+      if (rangeHeader) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+        if (match) {
+          const start = match[1] ? Number(match[1]) : 0;
+          const end = match[2] ? Math.min(Number(match[2]), total - 1) : total - 1;
+          if (start >= total || start > end) {
+            res.writeHead(416, { 'Content-Range': `bytes */${total}` });
+            res.end();
+            return;
+          }
+          res.writeHead(206, {
+            'Content-Type': contentType,
+            'Content-Range': `bytes ${start}-${end}/${total}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': String(end - start + 1),
+            'Cache-Control': 'no-store',
+          });
+          createReadStream(resolved, { start, end }).pipe(res);
+          return;
+        }
+      }
+
       res.writeHead(200, {
-        'Content-Type': STATIC_MIME[ext] || 'application/octet-stream',
+        'Content-Type': contentType,
+        'Content-Length': String(total),
+        'Accept-Ranges': 'bytes',
         'Content-Disposition': 'inline',
         'Cache-Control': 'no-store',
       });
-      res.end(buf);
+      createReadStream(resolved).pipe(res);
       return;
     }
 

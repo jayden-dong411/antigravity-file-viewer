@@ -1,8 +1,8 @@
 {
   "name": "file-viewer",
   "displayName": "File Viewer",
-  "version": "1.1.0",
-  "description": "Preview local Word (.docx), Excel (.xlsx/.xls/.csv/.ods), PowerPoint (.pptx), PDF (.pdf), HTML (.html), ZIP (.zip), and Markdown documents directly in the Antigravity side pane.",
+  "version": "1.2.0",
+  "description": "Preview local Word (.docx), Excel (.xlsx/.xls/.csv/.ods), PowerPoint (.pptx), PDF (.pdf), HTML (.html), ZIP (.zip), Jupyter Notebook (.ipynb), Audio/Video, Images/SVG, and Markdown directly in the Antigravity side pane.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
     "Open File Viewer in the side pane",

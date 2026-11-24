@@ -22,6 +22,9 @@ Works natively on **macOS**, **Linux**, and **Windows** using official Antigravi
 - **PDF** (`.pdf`): Native streaming PDF rendering inside the Sidecar pane (supports text selection, search, outlines, and large files).
 - **HTML** (`.html`, `.htm`): Live webpage rendering with relative sibling CSS/JS/image asset resolution, **Preview / Source** toggle, and **Desktop / Tablet / Mobile** viewport presets.
 - **ZIP Archives** (`.zip`): File tree explorer with sizes, compression ratio, live filename filtering, and inline preview of text, code, and image entries.
+- **Jupyter Notebooks** (`.ipynb`): Renders Markdown cells, code cells, stdout/stderr, tracebacks, HTML tables, and embedded plots with cell search.
+- **Audio & Video** (`.mp4`, `.webm`, `.mov`, `.m4v`, `.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac`): Native streaming player backed by HTTP `Range` (`206 Partial Content`) with `0.5x–2x` playback speed controls.
+- **Enhanced Images & SVG** (`.svg`, `.png`, `.jpg`, `.webp`, `.gif`, `.bmp`, `.ico`): Checkerboard / Light / Dark backdrop toggle, zoom, 90° rotation, natural pixel dimensions, and `.svg` **Preview / Source** toggle.
 - **Markdown** (`.md`, `.markdown`): Rendered document preview.
 - **Auto-Preview & One-Click Chat Pills**:
   - Bundled `rules/AGENTS.md` automatically pushes generated or inspected local files to File Viewer.

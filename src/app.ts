@@ -45,12 +45,28 @@ type RecentItem = {
 
 type Shortcut = { label: string; path: string };
 
+type NotebookOutput =
+  | { type: 'stream'; name: string; text: string }
+  | { type: 'error'; ename: string; evalue: string; traceback: string }
+  | { type: 'image'; src: string }
+  | { type: 'html'; html: string }
+  | { type: 'text'; text: string };
+
+type NotebookCell = {
+  index: number;
+  cellType: 'markdown' | 'code' | 'raw';
+  executionCount?: number | null;
+  source: string;
+  html?: string;
+  outputs?: NotebookOutput[];
+};
+
 type LoadedDoc = {
   filePath: string;
   fileName: string;
   ext: string;
   size: number;
-  kind: 'docx' | 'sheet' | 'pptx' | 'markdown' | 'pdf' | 'html' | 'zip';
+  kind: 'docx' | 'sheet' | 'pptx' | 'markdown' | 'pdf' | 'html' | 'zip' | 'ipynb' | 'media' | 'image';
   html?: string;
   warnings?: string[];
   sheets?: SheetData[];
@@ -65,6 +81,15 @@ type LoadedDoc = {
   dirCount?: number;
   totalSize?: number;
   totalCompressed?: number;
+  kernel?: string;
+  language?: string;
+  cellCount?: number;
+  cells?: NotebookCell[];
+  mediaType?: 'video' | 'audio';
+  mime?: string;
+  mediaBase64?: string;
+  isSvg?: boolean;
+  dataUrl?: string;
   recent?: RecentItem[];
 };
 
@@ -107,14 +132,14 @@ let pptxMountSeq = 0;
 let uploadedBlobUrl = '';
 let uploadedZipBase64 = '';
 
-function setPdfBlobUrl(b64?: string): string {
+function setBlobUrl(b64?: string, mime = 'application/pdf'): string {
   if (uploadedBlobUrl) {
     URL.revokeObjectURL(uploadedBlobUrl);
     uploadedBlobUrl = '';
   }
   if (!b64) return '';
   const buf = base64ToArrayBuffer(b64);
-  uploadedBlobUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
+  uploadedBlobUrl = URL.createObjectURL(new Blob([buf], { type: mime }));
   return uploadedBlobUrl;
 }
 
@@ -136,6 +161,11 @@ const state: {
   pptMode: 'list' | 'slide';
   htmlMode: 'preview' | 'source';
   htmlViewport: '100%' | '768px' | '390px';
+  imgBg: 'checker' | 'light' | 'dark';
+  imgRotate: number;
+  imgDims: string;
+  svgMode: 'preview' | 'source';
+  playbackRate: number;
   zipPreview: ZipPreview | null;
   zipPreviewLoading: boolean;
   drawerOpen: boolean;
@@ -157,6 +187,11 @@ const state: {
   pptMode: 'list',
   htmlMode: 'preview',
   htmlViewport: '100%',
+  imgBg: 'checker',
+  imgRotate: 0,
+  imgDims: '',
+  svgMode: 'preview',
+  playbackRate: 1,
   zipPreview: null,
   zipPreviewLoading: false,
   drawerOpen: false,
@@ -204,6 +239,9 @@ function badgeClass(ext: string): string {
   if (e === '.pdf') return 'badge-pdf';
   if (e === '.html' || e === '.htm') return 'badge-html';
   if (e === '.zip') return 'badge-zip';
+  if (e === '.ipynb') return 'badge-ipynb';
+  if (['.mp4', '.webm', '.mov', '.m4v', '.mp3', '.wav', '.m4a', '.ogg', '.flac'].includes(e)) return 'badge-media';
+  if (['.svg', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.ico'].includes(e)) return 'badge-img';
   return 'badge-md';
 }
 
@@ -227,8 +265,12 @@ async function loadFileByPath(filePath: string) {
       state.activeSheet = 0;
       state.search = '';
       state.zipPreview = null;
+      state.imgRotate = 0;
+      state.imgDims = '';
+      state.svgMode = 'preview';
+      state.playbackRate = 1;
       uploadedZipBase64 = '';
-      if (state.doc.kind === 'pdf') setPdfBlobUrl(undefined);
+      setBlobUrl(undefined);
       if (Array.isArray(sc.recent)) state.recent = sc.recent as RecentItem[];
       state.drawerOpen = false;
     }
@@ -263,8 +305,14 @@ async function handleFileUpload(file: File) {
       state.activeSheet = 0;
       state.search = '';
       state.zipPreview = null;
+      state.imgRotate = 0;
+      state.imgDims = '';
+      state.svgMode = 'preview';
+      state.playbackRate = 1;
       uploadedZipBase64 = state.doc.kind === 'zip' ? base64 : '';
-      if (state.doc.kind === 'pdf' && state.doc.pdfBase64) setPdfBlobUrl(state.doc.pdfBase64);
+      if (state.doc.kind === 'pdf' && state.doc.pdfBase64) setBlobUrl(state.doc.pdfBase64, 'application/pdf');
+      else if (state.doc.kind === 'media' && state.doc.mediaBase64) setBlobUrl(state.doc.mediaBase64, state.doc.mime || 'video/mp4');
+      else setBlobUrl(undefined);
       state.drawerOpen = false;
     }
   } catch (err) {
@@ -530,6 +578,107 @@ function renderZip(doc: LoadedDoc): string {
     </div>`;
 }
 
+function renderIpynb(doc: LoadedDoc): string {
+  const cells = doc.cells || [];
+  const query = state.search.trim().toLowerCase();
+  const filtered = query
+    ? cells.filter((c) => c.source.toLowerCase().includes(query))
+    : cells;
+
+  const cellsHtml = filtered
+    .map((cell) => {
+      if (cell.cellType === 'markdown') {
+        return `<div class="nb-cell nb-md"><div class="nb-gutter">MD</div><div class="nb-md-body">${cell.html || ''}</div></div>`;
+      }
+      if (cell.cellType === 'raw') {
+        return `<div class="nb-cell nb-raw"><div class="nb-gutter">RAW</div><pre class="nb-code"><code>${esc(cell.source)}</code></pre></div>`;
+      }
+      const prompt = cell.executionCount != null ? `In [${cell.executionCount}]:` : 'In [ ]:';
+      const outputsHtml = (cell.outputs || [])
+        .map((out) => {
+          if (out.type === 'image') {
+            return `<div class="nb-out nb-out-img"><img src="${out.src}" alt="Notebook output" /></div>`;
+          }
+          if (out.type === 'html') {
+            return `<div class="nb-out nb-out-html">${out.html}</div>`;
+          }
+          if (out.type === 'error') {
+            return `<pre class="nb-out nb-out-err"><code>${esc(out.traceback)}</code></pre>`;
+          }
+          if (out.type === 'stream') {
+            return `<pre class="nb-out nb-out-stream ${out.name === 'stderr' ? 'stderr' : ''}"><code>${esc(out.text)}</code></pre>`;
+          }
+          return `<pre class="nb-out nb-out-text"><code>${esc(out.text)}</code></pre>`;
+        })
+        .join('');
+
+      return `
+        <div class="nb-cell nb-code-cell">
+          <div class="nb-code-row">
+            <div class="nb-gutter">${esc(prompt)}</div>
+            <pre class="nb-code"><code>${esc(cell.source)}</code></pre>
+          </div>
+          ${outputsHtml ? `<div class="nb-outputs">${outputsHtml}</div>` : ''}
+        </div>`;
+    })
+    .join('');
+
+  return `
+    <div class="nb-canvas" style="font-size:${(state.zoom / 100) * 13}px">
+      <div class="nb-header">
+        <strong>${esc(doc.kernel || 'Jupyter Notebook')}</strong>
+        <span class="muted">${filtered.length} / ${doc.cellCount || cells.length} cells · ${esc(doc.language || 'python')}</span>
+      </div>
+      <div class="nb-cells">${cellsHtml || '<div class="empty-inline">No matching notebook cells.</div>'}</div>
+    </div>`;
+}
+
+function renderMedia(doc: LoadedDoc): string {
+  const src =
+    IS_SIDECAR && doc.filePath
+      ? `/api/raw?file=${encodeURIComponent(doc.filePath)}`
+      : uploadedBlobUrl;
+
+  if (!src) {
+    return `<div class="empty-inline">
+      <p><strong>Media streaming requires the File Viewer Sidecar panel.</strong></p>
+      <p class="muted">Open this file in the File Viewer sidecar tab for native audio/video playback with seeking.</p>
+    </div>`;
+  }
+
+  const player =
+    doc.mediaType === 'audio'
+      ? `<div class="audio-card">
+          <div class="audio-title">${esc(doc.fileName)}</div>
+          <div class="muted">${fmtSize(doc.size)} · ${esc(doc.mime || 'audio')}</div>
+          <audio id="media-el" class="audio-player" controls src="${esc(src)}"></audio>
+        </div>`
+      : `<video id="media-el" class="video-player" controls playsinline src="${esc(src)}"></video>`;
+
+  return `<div class="media-stage">${player}</div>`;
+}
+
+function renderImage(doc: LoadedDoc): string {
+  if (doc.isSvg && state.svgMode === 'source') {
+    return `<div class="html-source-wrap"><pre class="code-view"><code>${esc(doc.source || '')}</code></pre></div>`;
+  }
+  const src =
+    IS_SIDECAR && doc.filePath && !doc.isSvg
+      ? `/api/raw?file=${encodeURIComponent(doc.filePath)}`
+      : doc.dataUrl || (IS_SIDECAR && doc.filePath ? `/api/raw?file=${encodeURIComponent(doc.filePath)}` : '');
+
+  if (!src) {
+    return `<div class="empty-inline">Unable to load image.</div>`;
+  }
+
+  const transform = `scale(${state.zoom / 100}) rotate(${state.imgRotate}deg)`;
+  return `
+    <div class="img-stage bg-${state.imgBg}">
+      <img id="preview-img" class="preview-img" src="${esc(src)}" alt="${esc(doc.fileName)}" style="transform:${transform}" />
+    </div>
+    <div class="sheet-meta">${esc(doc.mime || 'image')} · ${fmtSize(doc.size)}${state.imgDims ? ` · ${esc(state.imgDims)}` : ''} · ${state.zoom}%${state.imgRotate ? ` · ${state.imgRotate}°` : ''}</div>`;
+}
+
 function renderDocument(): string {
   const doc = state.doc;
   if (!doc) {
@@ -567,7 +716,7 @@ function renderDocument(): string {
       <div class="welcome">
         <div class="dropzone" id="dropzone">
           <div class="drop-title">File Viewer</div>
-          <div class="drop-sub">Drop a local <code>.docx</code>, <code>.xlsx</code>, <code>.csv</code>, <code>.pptx</code>, <code>.pdf</code>, <code>.html</code>, <code>.zip</code>, or <code>.md</code> file here, click to choose, or browse folders.</div>
+          <div class="drop-sub">Drop a local <code>.docx</code>, <code>.xlsx</code>, <code>.pptx</code>, <code>.pdf</code>, <code>.html</code>, <code>.zip</code>, <code>.ipynb</code>, audio/video, image/SVG, or <code>.md</code> file here.</div>
           <div class="drop-actions">
             <button class="btn primary" id="pick-file-btn">Choose File</button>
             <button class="btn" id="open-drawer-btn">Browse Folders</button>
@@ -622,6 +771,18 @@ function renderDocument(): string {
     return renderZip(doc);
   }
 
+  if (doc.kind === 'ipynb') {
+    return renderIpynb(doc);
+  }
+
+  if (doc.kind === 'media') {
+    return renderMedia(doc);
+  }
+
+  if (doc.kind === 'image') {
+    return renderImage(doc);
+  }
+
   return `<div class="empty-inline">Unsupported document view.</div>`;
 }
 
@@ -671,7 +832,7 @@ function render() {
           <input id="path-input" type="text" value="${esc(pathVal)}" placeholder="Enter local file path (e.g. ~/Documents/report.docx)..." />
           <button class="btn sm primary" type="submit">Open</button>
         </form>
-        <input id="file-input" type="file" accept=".docx,.dotx,.xlsx,.xls,.xlsm,.xlsb,.csv,.tsv,.ods,.pptx,.pptm,.md,.markdown,.pdf,.html,.htm,.zip" hidden />
+        <input id="file-input" type="file" accept=".docx,.dotx,.xlsx,.xls,.xlsm,.xlsb,.csv,.tsv,.ods,.pptx,.pptm,.md,.markdown,.pdf,.html,.htm,.zip,.ipynb,.mp4,.webm,.mov,.m4v,.mp3,.wav,.m4a,.ogg,.flac,.svg,.png,.jpg,.jpeg,.webp,.gif,.bmp,.ico" hidden />
         <button class="btn sm" id="upload-btn" title="Choose a local file">Upload</button>
         ${doc?.filePath ? `<button class="btn sm" id="reload-btn" title="Reload from disk">Reload</button>` : ''}
       </div>
@@ -684,7 +845,7 @@ function render() {
                 <span class="muted">${fmtSize(doc.size)}</span>
               </div>
               <div class="controls">
-                ${doc.kind !== 'pptx' && doc.kind !== 'pdf' && doc.kind !== 'html' ? `<input id="search-input" class="search-input" type="search" value="${esc(state.search)}" placeholder="Filter / search..." />` : ''}
+                ${doc.kind !== 'pptx' && doc.kind !== 'pdf' && doc.kind !== 'html' && doc.kind !== 'media' && doc.kind !== 'image' ? `<input id="search-input" class="search-input" type="search" value="${esc(state.search)}" placeholder="Filter / search..." />` : ''}
                 ${
                   doc.kind === 'pptx'
                     ? `<button class="btn sm" id="ppt-mode-btn" title="Toggle continuous list / single slide mode">${
@@ -705,9 +866,37 @@ function render() {
                        }`
                     : ''
                 }
+                ${
+                  doc.kind === 'media'
+                    ? [0.5, 1, 1.25, 1.5, 2]
+                        .map(
+                          (r) =>
+                            `<button class="btn sm ${state.playbackRate === r ? 'active' : ''}" data-rate="${r}">${r}x</button>`,
+                        )
+                        .join('')
+                    : ''
+                }
+                ${
+                  doc.kind === 'image'
+                    ? `${
+                        doc.isSvg
+                          ? `<button class="btn sm ${state.svgMode === 'preview' ? 'active' : ''}" id="svg-preview-btn">Preview</button>
+                             <button class="btn sm ${state.svgMode === 'source' ? 'active' : ''}" id="svg-source-btn">Source</button>`
+                          : ''
+                      }
+                      ${
+                        !doc.isSvg || state.svgMode === 'preview'
+                          ? `<button class="btn sm ${state.imgBg === 'checker' ? 'active' : ''}" data-imgbg="checker">Checker</button>
+                             <button class="btn sm ${state.imgBg === 'light' ? 'active' : ''}" data-imgbg="light">Light</button>
+                             <button class="btn sm ${state.imgBg === 'dark' ? 'active' : ''}" data-imgbg="dark">Dark</button>
+                             <button class="btn sm" id="img-rotate-btn">Rotate</button>`
+                          : ''
+                      }`
+                    : ''
+                }
                 ${doc.kind === 'pptx' && doc.notes && doc.notes.length > 0 ? `<button class="btn sm ${state.showNotes ? 'active' : ''}" id="notes-btn">Notes</button>` : ''}
                 ${
-                  doc.kind !== 'pdf' && doc.kind !== 'html' && doc.kind !== 'zip'
+                  doc.kind !== 'pdf' && doc.kind !== 'html' && doc.kind !== 'zip' && doc.kind !== 'media'
                     ? `<button class="btn sm" id="zoom-out">-</button>
                        <span class="zoom-label">${state.zoom}%</span>
                        <button class="btn sm" id="zoom-in">+</button>`
@@ -828,6 +1017,63 @@ function bindEvents() {
       if (p) void openZipEntry(p);
     });
   });
+
+  // Media playback rate
+  const mediaEl = document.getElementById('media-el') as HTMLMediaElement | null;
+  if (mediaEl) {
+    mediaEl.playbackRate = state.playbackRate;
+  }
+  document.querySelectorAll<HTMLElement>('[data-rate]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const rate = Number(el.getAttribute('data-rate') || 1);
+      state.playbackRate = rate;
+      const m = document.getElementById('media-el') as HTMLMediaElement | null;
+      if (m) m.playbackRate = rate;
+      document.querySelectorAll<HTMLElement>('[data-rate]').forEach((b) => {
+        b.classList.toggle('active', Number(b.getAttribute('data-rate')) === rate);
+      });
+    });
+  });
+
+  // Image & SVG controls
+  document.getElementById('svg-preview-btn')?.addEventListener('click', () => {
+    state.svgMode = 'preview';
+    render();
+  });
+  document.getElementById('svg-source-btn')?.addEventListener('click', () => {
+    state.svgMode = 'source';
+    render();
+  });
+  document.querySelectorAll<HTMLElement>('[data-imgbg]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const bg = el.getAttribute('data-imgbg') as 'checker' | 'light' | 'dark';
+      if (bg) {
+        state.imgBg = bg;
+        render();
+      }
+    });
+  });
+  document.getElementById('img-rotate-btn')?.addEventListener('click', () => {
+    state.imgRotate = (state.imgRotate + 90) % 360;
+    render();
+  });
+  const previewImg = document.getElementById('preview-img') as HTMLImageElement | null;
+  if (previewImg && !state.imgDims) {
+    const updateDims = () => {
+      if (previewImg.naturalWidth && previewImg.naturalHeight) {
+        const dims = `${previewImg.naturalWidth} × ${previewImg.naturalHeight} px`;
+        if (state.imgDims !== dims) {
+          state.imgDims = dims;
+          const meta = document.querySelector('.sheet-meta');
+          if (meta && !meta.textContent?.includes('px')) {
+            meta.textContent = `${meta.textContent} · ${dims}`;
+          }
+        }
+      }
+    };
+    if (previewImg.complete) updateDims();
+    else previewImg.addEventListener('load', updateDims, { once: true });
+  }
 
   document.getElementById('attach-btn')?.addEventListener('click', async () => {
     if (!state.doc?.filePath || !app) return;

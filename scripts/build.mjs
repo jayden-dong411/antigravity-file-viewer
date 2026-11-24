@@ -195,6 +195,9 @@ input[type="text"]:focus, input[type="search"]:focus {
 .badge-pdf { background: #dc2626; }
 .badge-html { background: #0284c7; }
 .badge-zip { background: #7c3aed; }
+.badge-ipynb { background: #f97316; }
+.badge-media { background: #db2777; }
+.badge-img { background: #0d9488; }
 .badge-md { background: #6366f1; }
 
 .welcome {
@@ -532,6 +535,158 @@ input[type="text"]:focus, input[type="search"]:focus {
   max-height: 75vh;
   border-radius: 6px;
   border: 1px solid var(--color-border-primary, #d0d7de);
+}
+
+/* Jupyter Notebook (.ipynb) */
+.nb-canvas {
+  padding: 18px 16px 40px;
+  background: var(--color-background-secondary, #f3f4f6);
+  min-height: 100%;
+}
+.nb-header {
+  max-width: 900px;
+  margin: 0 auto 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--color-background-primary, #ffffff);
+  border: 1px solid var(--color-border-primary, #d0d7de);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.nb-cells {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.nb-cell {
+  background: var(--color-background-primary, #ffffff);
+  border: 1px solid var(--color-border-primary, #d0d7de);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.nb-md, .nb-raw, .nb-code-row {
+  display: flex;
+  align-items: stretch;
+}
+.nb-gutter {
+  width: 68px;
+  flex-shrink: 0;
+  padding: 10px 8px;
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--color-text-secondary, #656d76);
+  background: var(--color-background-secondary, #f6f8fa);
+  border-right: 1px solid var(--color-border-primary, #d0d7de);
+  user-select: none;
+}
+.nb-md-body {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 16px;
+}
+.nb-md-body img { max-width: 100%; }
+.nb-code {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+}
+.nb-outputs {
+  border-top: 1px solid var(--color-border-primary, #d0d7de);
+  padding: 10px 14px 10px 82px;
+  background: var(--color-background-primary, #ffffff);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.nb-out { margin: 0; font-size: 12px; overflow-x: auto; }
+.nb-out-stream, .nb-out-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+}
+.nb-out-stream.stderr { color: #b45309; }
+.nb-out-err {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(220, 38, 38, 0.08);
+  color: #dc2626;
+}
+.nb-out-img img { max-width: 100%; border-radius: 4px; }
+.nb-out-html table { border-collapse: collapse; font-size: 12px; }
+.nb-out-html th, .nb-out-html td { border: 1px solid var(--color-border-primary, #d0d7de); padding: 4px 8px; }
+
+/* Media (Video / Audio) */
+.media-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  min-height: 0;
+  height: 100%;
+  background: #0f1115;
+}
+.video-player {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  background: #000000;
+}
+.audio-card {
+  width: 100%;
+  max-width: 520px;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--color-background-primary, #ffffff);
+  border: 1px solid var(--color-border-primary, #d0d7de);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+.audio-title { font-size: 16px; font-weight: 700; word-break: break-all; }
+.audio-player { width: 100%; margin-top: 8px; }
+
+/* Enhanced Image & SVG viewer */
+.img-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.img-stage.bg-checker {
+  background-color: #e5e7eb;
+  background-image:
+    linear-gradient(45deg, #cbd5e1 25%, transparent 25%),
+    linear-gradient(-45deg, #cbd5e1 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #cbd5e1 75%),
+    linear-gradient(-45deg, transparent 75%, #cbd5e1 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+.img-stage.bg-light { background: #ffffff; }
+.img-stage.bg-dark { background: #111318; }
+.preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.12s ease;
+  transform-origin: center center;
 }
 .empty-inline { padding: 24px; text-align: center; color: var(--color-text-secondary, #656d76); }
 `;

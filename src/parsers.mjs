@@ -14,7 +14,15 @@ export const SUPPORTED_EXTENSIONS = new Set([
   '.pdf',
   '.html', '.htm',
   '.zip',
+  '.ipynb',
+  '.mp4', '.webm', '.mov', '.m4v',
+  '.mp3', '.wav', '.m4a', '.ogg', '.flac',
+  '.svg', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.ico',
 ]);
+
+const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mov', '.m4v']);
+const AUDIO_EXTS = new Set(['.mp3', '.wav', '.m4a', '.ogg', '.flac']);
+const IMAGE_EXTS = new Set(['.svg', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.ico']);
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MiB
 const DEFAULT_MAX_ROWS = 1000;
@@ -50,8 +58,112 @@ function mimeFromExt(fileName) {
     '.webp': 'image/webp',
     '.svg': 'image/svg+xml',
     '.bmp': 'image/bmp',
+    '.ico': 'image/x-icon',
+    '.mp4': 'video/mp4',
+    '.m4v': 'video/mp4',
+    '.webm': 'video/webm',
+    '.mov': 'video/quicktime',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.m4a': 'audio/mp4',
+    '.ogg': 'audio/ogg',
+    '.flac': 'audio/flac',
   };
   return map[ext] || null;
+}
+
+function stripAnsi(str) {
+  return String(str || '').replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+}
+
+function joinSource(src) {
+  if (Array.isArray(src)) return src.join('');
+  return typeof src === 'string' ? src : '';
+}
+
+async function parseIpynb(buffer) {
+  const nb = JSON.parse(buffer.toString('utf8'));
+  const rawCells = Array.isArray(nb.cells) ? nb.cells : [];
+  const kernel =
+    nb.metadata?.kernelspec?.display_name ||
+    nb.metadata?.language_info?.name ||
+    'Python';
+  const language = nb.metadata?.language_info?.name || 'python';
+
+  const cells = [];
+  for (let i = 0; i < rawCells.length; i++) {
+    const c = rawCells[i] || {};
+    const cellType = c.cell_type || 'code';
+    const source = joinSource(c.source);
+
+    if (cellType === 'markdown') {
+      const html = await marked.parse(source);
+      cells.push({ index: i + 1, cellType: 'markdown', source, html });
+      continue;
+    }
+
+    if (cellType === 'raw') {
+      cells.push({ index: i + 1, cellType: 'raw', source });
+      continue;
+    }
+
+    const outputs = [];
+    for (const out of Array.isArray(c.outputs) ? c.outputs : []) {
+      const otype = out.output_type;
+      if (otype === 'stream') {
+        outputs.push({
+          type: 'stream',
+          name: out.name || 'stdout',
+          text: stripAnsi(joinSource(out.text)),
+        });
+      } else if (otype === 'error') {
+        const tb = Array.isArray(out.traceback)
+          ? stripAnsi(out.traceback.join('\n'))
+          : `${out.ename || 'Error'}: ${out.evalue || ''}`;
+        outputs.push({
+          type: 'error',
+          ename: out.ename || 'Error',
+          evalue: stripAnsi(out.evalue || ''),
+          traceback: tb,
+        });
+      } else if (otype === 'display_data' || otype === 'execute_result') {
+        const data = out.data || {};
+        if (data['image/png']) {
+          const b64 = joinSource(data['image/png']).replace(/\s+/g, '');
+          outputs.push({ type: 'image', src: `data:image/png;base64,${b64}` });
+        } else if (data['image/jpeg']) {
+          const b64 = joinSource(data['image/jpeg']).replace(/\s+/g, '');
+          outputs.push({ type: 'image', src: `data:image/jpeg;base64,${b64}` });
+        } else if (data['image/svg+xml']) {
+          const svg = joinSource(data['image/svg+xml']);
+          outputs.push({
+            type: 'image',
+            src: `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`,
+          });
+        } else if (data['text/html']) {
+          outputs.push({ type: 'html', html: joinSource(data['text/html']) });
+        } else if (data['text/plain']) {
+          outputs.push({ type: 'text', text: stripAnsi(joinSource(data['text/plain'])) });
+        }
+      }
+    }
+
+    cells.push({
+      index: i + 1,
+      cellType: 'code',
+      executionCount: c.execution_count ?? null,
+      source,
+      outputs,
+    });
+  }
+
+  return {
+    kind: 'ipynb',
+    kernel,
+    language,
+    cellCount: cells.length,
+    cells,
+  };
 }
 
 async function parseDocx(buffer) {
@@ -303,7 +415,39 @@ export async function parseOfficeBuffer(buffer, fileName, options = {}) {
   if (ext === '.zip') {
     return await parseZip(buffer);
   }
-  throw new Error(`Unsupported file format: ${ext || '(no extension)'}. Supported: .docx, .xlsx, .xls, .csv, .tsv, .ods, .pptx, .md, .pdf, .html, .zip`);
+  if (ext === '.ipynb') {
+    return await parseIpynb(buffer);
+  }
+  if (VIDEO_EXTS.has(ext)) {
+    return {
+      kind: 'media',
+      mediaType: 'video',
+      mime: mimeFromExt(fileName) || 'video/mp4',
+      mediaBase64: options.includeBase64 ? buffer.toString('base64') : undefined,
+    };
+  }
+  if (AUDIO_EXTS.has(ext)) {
+    return {
+      kind: 'media',
+      mediaType: 'audio',
+      mime: mimeFromExt(fileName) || 'audio/mpeg',
+      mediaBase64: options.includeBase64 ? buffer.toString('base64') : undefined,
+    };
+  }
+  if (IMAGE_EXTS.has(ext)) {
+    const mime = mimeFromExt(fileName) || 'image/png';
+    const isSvg = ext === '.svg';
+    return {
+      kind: 'image',
+      mime,
+      isSvg,
+      source: isSvg ? buffer.toString('utf8') : undefined,
+      dataUrl: options.includeBase64 || buffer.length <= 8 * 1024 * 1024
+        ? `data:${mime};base64,${buffer.toString('base64')}`
+        : undefined,
+    };
+  }
+  throw new Error(`Unsupported file format: ${ext || '(no extension)'}. Supported: .docx, .xlsx, .xls, .csv, .tsv, .ods, .pptx, .md, .pdf, .html, .zip, .ipynb, audio/video, images`);
 }
 
 export async function loadOfficeFile(filePath, options = {}) {
@@ -312,16 +456,38 @@ export async function loadOfficeFile(filePath, options = {}) {
   if (!stat.isFile()) {
     throw new Error(`Path is not a file: ${resolved}`);
   }
+  const fileName = path.basename(resolved);
+  const ext = path.extname(fileName).toLowerCase();
+
+  // Streamed formats (PDF / Audio / Video): skip reading full file into memory
+  if (ext === '.pdf' || VIDEO_EXTS.has(ext) || AUDIO_EXTS.has(ext)) {
+    const parsed =
+      ext === '.pdf'
+        ? { kind: 'pdf' }
+        : {
+            kind: 'media',
+            mediaType: VIDEO_EXTS.has(ext) ? 'video' : 'audio',
+            mime: mimeFromExt(fileName) || (VIDEO_EXTS.has(ext) ? 'video/mp4' : 'audio/mpeg'),
+          };
+    return {
+      filePath: resolved,
+      fileName,
+      ext,
+      size: stat.size,
+      mtimeMs: stat.mtimeMs,
+      ...parsed,
+    };
+  }
+
   if (stat.size > MAX_FILE_BYTES) {
     throw new Error(`File exceeds 50 MiB limit (${(stat.size / 1024 / 1024).toFixed(1)} MiB)`);
   }
   const buffer = await fs.readFile(resolved);
-  const fileName = path.basename(resolved);
   const parsed = await parseOfficeBuffer(buffer, fileName, options);
   return {
     filePath: resolved,
     fileName,
-    ext: path.extname(fileName).toLowerCase(),
+    ext,
     size: stat.size,
     mtimeMs: stat.mtimeMs,
     ...parsed,

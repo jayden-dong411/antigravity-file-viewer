@@ -1,6 +1,6 @@
 # File Viewer Auto-Preview & Sidecar Pill Rules
 
-Whenever you create, update, locate, or are asked to inspect a local Office, PDF, HTML, or archive document (`.docx`, `.dotx`, `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.csv`, `.tsv`, `.ods`, `.pdf`, `.html`, `.htm`, `.zip`, or `.pptx` when the user explicitly requests local preview rather than Google Slides):
+Whenever you create, update, locate, or are asked to inspect a local Office, PDF, HTML, archive, Notebook, media, or SVG/image file (`.docx`, `.dotx`, `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.csv`, `.tsv`, `.ods`, `.pdf`, `.html`, `.htm`, `.zip`, `.ipynb`, `.mp4`, `.webm`, `.mov`, `.mp3`, `.wav`, `.m4a`, `.svg`, or `.pptx` when the user explicitly requests local preview rather than Google Slides):
 
 1. **Auto-push to File Viewer**: Call the `file-viewer` MCP tool `open_file_viewer` with `{ "filePath": "/absolute/path/to/file" }` so the document opens/updates directly in the Antigravity side pane and syncs as the active preview file.
 2. **Surface a one-click sidecar pill link**: In your chat response, include a clickable `sidecar://` pill link so the user can open or focus that exact document in the File Viewer side pane with one click:

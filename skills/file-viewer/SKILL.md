@@ -1,6 +1,6 @@
 ---
 name: file-viewer
-description: Preview local Office documents (.docx, .xlsx, .xls, .csv, .tsv, .ods, .pptx), PDF (.pdf), HTML (.html/.htm), ZIP archives (.zip), and Markdown (.md) directly inside the Antigravity side pane using the File Viewer MCP App and Sidecar.
+description: Preview local Office documents (.docx, .xlsx, .xls, .csv, .tsv, .ods, .pptx), PDF (.pdf), HTML (.html/.htm), ZIP archives (.zip), Jupyter Notebooks (.ipynb), audio/video (.mp4/.webm/.mov/.mp3/.wav/.m4a), images/SVG (.svg/.png/.jpg/.webp/.gif), and Markdown (.md) directly inside the Antigravity side pane using the File Viewer MCP App and Sidecar.
 ---
 
 # File Viewer
