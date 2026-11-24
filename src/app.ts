@@ -249,6 +249,26 @@ function badgeLabel(ext: string): string {
   return (ext || '').replace(/^\./, '').toUpperCase() || 'DOC';
 }
 
+// Tabler Icons (1.75px stroke, inline SVG for strict MCP App CSP compatibility)
+const ICONS = {
+  sidebar: `<svg class="ico" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 4v16"/></svg>`,
+  folder: `<svg class="ico" viewBox="0 0 24 24"><path d="M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2"/></svg>`,
+  upload: `<svg class="ico" viewBox="0 0 24 24"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M7 9l5-5l5 5"/><path d="M12 4v12"/></svg>`,
+  refresh: `<svg class="ico" viewBox="0 0 24 24"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/></svg>`,
+  search: `<svg class="ico" viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path d="M21 21l-6-6"/></svg>`,
+  home: `<svg class="ico" viewBox="0 0 24 24"><path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"/></svg>`,
+  plus: `<svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>`,
+  minus: `<svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/></svg>`,
+  rotate: `<svg class="ico" viewBox="0 0 24 24"><path d="M4.05 11a8 8 0 1 1 .5 4m-.5 5v-5h5"/></svg>`,
+  notes: `<svg class="ico" viewBox="0 0 24 24"><path d="M5 3m0 2a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M9 7h6"/><path d="M9 11h6"/><path d="M9 15h4"/></svg>`,
+  paperclip: `<svg class="ico" viewBox="0 0 24 24"><path d="M15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3l6.5-6.5a3 3 0 0 0-6-6l-6.5 6.5a4.5 4.5 0 0 0 9 9l6.5-6.5"/></svg>`,
+  up: `<svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M18 11l-6-6"/><path d="M6 11l6-6"/></svg>`,
+  close: `<svg class="ico" viewBox="0 0 24 24"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></svg>`,
+  file: `<svg class="ico" viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>`,
+  chevron: `<svg class="ico" viewBox="0 0 24 24"><path d="M9 6l6 6l-6 6"/></svg>`,
+  slides: `<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4"/><path d="M8 20h8"/></svg>`,
+};
+
 async function loadFileByPath(filePath: string) {
   if (!filePath.trim()) return;
   state.loading = true;
@@ -714,14 +734,28 @@ function renderDocument(): string {
 
     return `
       <div class="welcome">
-        <div class="dropzone" id="dropzone">
-          <div class="drop-title">File Viewer</div>
-          <div class="drop-sub">Drop a local <code>.docx</code>, <code>.xlsx</code>, <code>.pptx</code>, <code>.pdf</code>, <code>.html</code>, <code>.zip</code>, <code>.ipynb</code>, audio/video, image/SVG, or <code>.md</code> file here.</div>
-          <div class="drop-actions">
-            <button class="btn primary" id="pick-file-btn">Choose File</button>
-            <button class="btn" id="open-drawer-btn">Browse Folders</button>
+        <div class="frame">
+          <div class="dropzone" id="dropzone">
+            <div class="hero-icon">${ICONS.file}</div>
+            <div class="drop-title">File Viewer</div>
+            <div class="drop-sub">Preview local documents, spreadsheets, slides, notebooks, media, archives, and HTML directly in your side pane.</div>
+            <div class="format-pills">
+              <span class="badge badge-word">DOCX</span>
+              <span class="badge badge-excel">XLSX / CSV</span>
+              <span class="badge badge-ppt">PPTX</span>
+              <span class="badge badge-pdf">PDF</span>
+              <span class="badge badge-html">HTML</span>
+              <span class="badge badge-zip">ZIP</span>
+              <span class="badge badge-ipynb">IPYNB</span>
+              <span class="badge badge-media">MP4 / MP3</span>
+              <span class="badge badge-img">SVG / PNG</span>
+            </div>
+            <div class="drop-actions">
+              <button class="btn primary" id="pick-file-btn">${ICONS.upload}<span>Choose File</span></button>
+              <button class="btn" id="open-drawer-btn">${ICONS.folder}<span>Browse Folders</span></button>
+            </div>
+            ${shortcutsHtml}
           </div>
-          ${shortcutsHtml}
         </div>
         ${recentHtml}
       </div>`;
@@ -792,8 +826,9 @@ function renderDrawer(): string {
     .map((e) => {
       if (e.isDir) {
         return `<button class="drawer-item" data-dir="${esc(e.path)}">
-          <span class="icon-dir">DIR</span>
+          <span class="icon-dir">${ICONS.folder}</span>
           <span class="drawer-name">${esc(e.name)}</span>
+          <span class="drawer-chev">${ICONS.chevron}</span>
         </button>`;
       }
       return `<button class="drawer-item" data-open="${esc(e.path)}">
@@ -809,11 +844,11 @@ function renderDrawer(): string {
       <div class="drawer-head">
         <div class="drawer-path" title="${esc(state.currentDir)}">${esc(state.currentDir || '~')}</div>
         <div class="drawer-actions">
-          ${state.parentDir ? `<button class="btn sm" data-dir="${esc(state.parentDir)}">Up</button>` : ''}
-          <button class="btn sm" id="close-drawer-btn">Close</button>
+          ${state.parentDir ? `<button class="btn sm ghost" data-dir="${esc(state.parentDir)}" title="Parent folder">${ICONS.up}<span>Up</span></button>` : ''}
+          <button class="btn sm ghost icon-only" id="close-drawer-btn" title="Close browser">${ICONS.close}</button>
         </div>
       </div>
-      <div class="drawer-list">${items || '<div class="empty-inline">No supported Office files in this folder.</div>'}</div>
+      <div class="drawer-list">${items || '<div class="empty-inline">No supported files in this folder.</div>'}</div>
     </aside>`;
 }
 
@@ -827,14 +862,15 @@ function render() {
   root.innerHTML = `
     <header class="toolbar">
       <div class="toolbar-row">
-        <button class="btn sm" id="toggle-drawer-btn" title="Browse local folders">Browse</button>
-        <form class="path-form" id="path-form">
-          <input id="path-input" type="text" value="${esc(pathVal)}" placeholder="Enter local file path (e.g. ~/Documents/report.docx)..." />
-          <button class="btn sm primary" type="submit">Open</button>
+        <button class="btn sm ${state.drawerOpen ? 'active' : ''}" id="toggle-drawer-btn" title="Browse local folders">${ICONS.sidebar}<span>Browse</span></button>
+        <form class="input-group" id="path-form">
+          <span class="input-addon">${ICONS.folder}</span>
+          <input id="path-input" type="text" value="${esc(pathVal)}" placeholder="Paste local file path (e.g. ~/Documents/report.docx)..." />
+          <button class="input-submit" type="submit">Open</button>
         </form>
         <input id="file-input" type="file" accept=".docx,.dotx,.xlsx,.xls,.xlsm,.xlsb,.csv,.tsv,.ods,.pptx,.pptm,.md,.markdown,.pdf,.html,.htm,.zip,.ipynb,.mp4,.webm,.mov,.m4v,.mp3,.wav,.m4a,.ogg,.flac,.svg,.png,.jpg,.jpeg,.webp,.gif,.bmp,.ico" hidden />
-        <button class="btn sm" id="upload-btn" title="Choose a local file">Upload</button>
-        ${doc?.filePath ? `<button class="btn sm" id="reload-btn" title="Reload from disk">Reload</button>` : ''}
+        <button class="btn sm" id="upload-btn" title="Choose a local file">${ICONS.upload}<span>Open File</span></button>
+        ${doc?.filePath ? `<button class="btn sm icon-only" id="reload-btn" title="Reload from disk">${ICONS.refresh}</button>` : ''}
       </div>
       ${
         doc
@@ -842,79 +878,94 @@ function render() {
               <div class="doc-meta">
                 <span class="badge ${badgeClass(doc.ext)}">${badgeLabel(doc.ext)}</span>
                 <strong class="doc-title" title="${esc(doc.filePath || doc.fileName)}">${esc(doc.fileName)}</strong>
+                <span class="meta-dot"></span>
                 <span class="muted">${fmtSize(doc.size)}</span>
               </div>
               <div class="controls">
-                ${doc.kind !== 'pptx' && doc.kind !== 'pdf' && doc.kind !== 'html' && doc.kind !== 'media' && doc.kind !== 'image' ? `<input id="search-input" class="search-input" type="search" value="${esc(state.search)}" placeholder="Filter / search..." />` : ''}
+                ${
+                  doc.kind !== 'pptx' && doc.kind !== 'pdf' && doc.kind !== 'html' && doc.kind !== 'media' && doc.kind !== 'image'
+                    ? `<div class="search-wrap">${ICONS.search}<input id="search-input" class="search-input" type="search" value="${esc(state.search)}" placeholder="Filter..." /></div>`
+                    : ''
+                }
                 ${
                   doc.kind === 'pptx'
-                    ? `<button class="btn sm" id="ppt-mode-btn" title="Toggle continuous list / single slide mode">${
+                    ? `<button class="btn sm" id="ppt-mode-btn" title="Toggle continuous list / single slide mode">${ICONS.slides}<span>${
                         state.pptMode === 'list' ? 'Continuous' : 'Single Slide'
-                      }</button>`
+                      }</span></button>`
                     : ''
                 }
                 ${
                   doc.kind === 'html'
-                    ? `<button class="btn sm ${state.htmlMode === 'preview' ? 'active' : ''}" id="html-preview-btn">Preview</button>
-                       <button class="btn sm ${state.htmlMode === 'source' ? 'active' : ''}" id="html-source-btn">Source</button>
+                    ? `<div class="seg-group">
+                         <button class="seg-btn ${state.htmlMode === 'preview' ? 'active' : ''}" id="html-preview-btn">Preview</button>
+                         <button class="seg-btn ${state.htmlMode === 'source' ? 'active' : ''}" id="html-source-btn">Source</button>
+                       </div>
                        ${
                          state.htmlMode === 'preview'
-                           ? `<button class="btn sm ${state.htmlViewport === '100%' ? 'active' : ''}" data-vp="100%">Desktop</button>
-                              <button class="btn sm ${state.htmlViewport === '768px' ? 'active' : ''}" data-vp="768px">Tablet</button>
-                              <button class="btn sm ${state.htmlViewport === '390px' ? 'active' : ''}" data-vp="390px">Mobile</button>`
+                           ? `<div class="seg-group">
+                                <button class="seg-btn ${state.htmlViewport === '100%' ? 'active' : ''}" data-vp="100%">Desktop</button>
+                                <button class="seg-btn ${state.htmlViewport === '768px' ? 'active' : ''}" data-vp="768px">Tablet</button>
+                                <button class="seg-btn ${state.htmlViewport === '390px' ? 'active' : ''}" data-vp="390px">Mobile</button>
+                              </div>`
                            : ''
                        }`
                     : ''
                 }
                 ${
                   doc.kind === 'media'
-                    ? [0.5, 1, 1.25, 1.5, 2]
+                    ? `<div class="seg-group">${[0.5, 1, 1.25, 1.5, 2]
                         .map(
                           (r) =>
-                            `<button class="btn sm ${state.playbackRate === r ? 'active' : ''}" data-rate="${r}">${r}x</button>`,
+                            `<button class="seg-btn ${state.playbackRate === r ? 'active' : ''}" data-rate="${r}">${r}x</button>`,
                         )
-                        .join('')
+                        .join('')}</div>`
                     : ''
                 }
                 ${
                   doc.kind === 'image'
                     ? `${
                         doc.isSvg
-                          ? `<button class="btn sm ${state.svgMode === 'preview' ? 'active' : ''}" id="svg-preview-btn">Preview</button>
-                             <button class="btn sm ${state.svgMode === 'source' ? 'active' : ''}" id="svg-source-btn">Source</button>`
+                          ? `<div class="seg-group">
+                               <button class="seg-btn ${state.svgMode === 'preview' ? 'active' : ''}" id="svg-preview-btn">Preview</button>
+                               <button class="seg-btn ${state.svgMode === 'source' ? 'active' : ''}" id="svg-source-btn">Source</button>
+                             </div>`
                           : ''
                       }
                       ${
                         !doc.isSvg || state.svgMode === 'preview'
-                          ? `<button class="btn sm ${state.imgBg === 'checker' ? 'active' : ''}" data-imgbg="checker">Checker</button>
-                             <button class="btn sm ${state.imgBg === 'light' ? 'active' : ''}" data-imgbg="light">Light</button>
-                             <button class="btn sm ${state.imgBg === 'dark' ? 'active' : ''}" data-imgbg="dark">Dark</button>
-                             <button class="btn sm" id="img-rotate-btn">Rotate</button>`
+                          ? `<div class="seg-group">
+                               <button class="seg-btn ${state.imgBg === 'checker' ? 'active' : ''}" data-imgbg="checker">Checker</button>
+                               <button class="seg-btn ${state.imgBg === 'light' ? 'active' : ''}" data-imgbg="light">Light</button>
+                               <button class="seg-btn ${state.imgBg === 'dark' ? 'active' : ''}" data-imgbg="dark">Dark</button>
+                             </div>
+                             <button class="btn sm icon-only" id="img-rotate-btn" title="Rotate 90°">${ICONS.rotate}</button>`
                           : ''
                       }`
                     : ''
                 }
-                ${doc.kind === 'pptx' && doc.notes && doc.notes.length > 0 ? `<button class="btn sm ${state.showNotes ? 'active' : ''}" id="notes-btn">Notes</button>` : ''}
+                ${doc.kind === 'pptx' && doc.notes && doc.notes.length > 0 ? `<button class="btn sm ${state.showNotes ? 'active' : ''}" id="notes-btn">${ICONS.notes}<span>Notes</span></button>` : ''}
                 ${
                   doc.kind !== 'pdf' && doc.kind !== 'html' && doc.kind !== 'zip' && doc.kind !== 'media'
-                    ? `<button class="btn sm" id="zoom-out">-</button>
-                       <span class="zoom-label">${state.zoom}%</span>
-                       <button class="btn sm" id="zoom-in">+</button>`
+                    ? `<div class="seg-group">
+                         <button class="seg-btn icon-only" id="zoom-out" title="Zoom out">${ICONS.minus}</button>
+                         <span class="zoom-label">${state.zoom}%</span>
+                         <button class="seg-btn icon-only" id="zoom-in" title="Zoom in">${ICONS.plus}</button>
+                       </div>`
                     : ''
                 }
                 ${
                   state.canUpdateContext && doc.filePath
-                    ? `<button class="btn sm" id="attach-btn" title="Attach file path to your next chat message">Attach</button>`
+                    ? `<button class="btn sm" id="attach-btn" title="Attach file path to your next chat message">${ICONS.paperclip}<span>Attach</span></button>`
                     : ''
                 }
-                <button class="btn sm" id="home-btn">Home</button>
+                <button class="btn sm icon-only" id="home-btn" title="Home">${ICONS.home}</button>
               </div>
             </div>`
           : ''
       }
+      ${state.loading ? `<div class="loading-bar"><div class="loading-bar-inner"></div></div>` : ''}
     </header>
     ${state.error ? `<div class="banner error">${esc(state.error)}</div>` : ''}
-    ${state.loading ? `<div class="banner info">Loading document...</div>` : ''}
     <main class="workspace">
       ${renderDrawer()}
       <section class="viewport">${renderDocument()}</section>
