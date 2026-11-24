@@ -1,0 +1,21 @@
+{
+  "name": "antigravity-office-viewer-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "latest",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.9.0",
+    "marked": "^15.0.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/ext-apps": "latest",
+    "esbuild": "^0.25.0"
+  }
+}
