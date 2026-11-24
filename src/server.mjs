@@ -21,13 +21,13 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = path.resolve(__dirname, '..');
-const APP_URI = 'ui://office-viewer/app.html';
-const APP_HTML_PATH = process.env.OFFICE_VIEWER_APP_HTML || path.join(PLUGIN_ROOT, 'dist', 'app.html');
+const APP_URI = 'ui://file-viewer/app.html';
+const APP_HTML_PATH = process.env.FILE_VIEWER_APP_HTML || path.join(PLUGIN_ROOT, 'dist', 'app.html');
 
 function parseDataDir() {
   const arg = process.argv.find((a) => a.startsWith('--data-dir='));
   if (arg) return arg.slice('--data-dir='.length);
-  return path.join(os.homedir(), '.gemini', 'antigravity', 'plugin_data', 'office-viewer');
+  return path.join(os.homedir(), '.gemini', 'antigravity', 'plugin_data', 'file-viewer');
 }
 
 const DATA_DIR = parseDataDir();
@@ -73,8 +73,8 @@ async function addRecent(entry) {
 
 const server = new Server(
   {
-    name: 'office-viewer',
-    version: '1.0.0',
+    name: 'file-viewer',
+    version: '1.1.0',
   },
   {
     capabilities: {
@@ -88,8 +88,8 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => ({
   resources: [
     {
       uri: APP_URI,
-      name: 'Office Viewer App',
-      description: 'Interactive Office document viewer for Word, Excel, PowerPoint, and Markdown files',
+      name: 'File Viewer App',
+      description: 'Interactive file viewer for Word, Excel, PowerPoint, PDF, HTML, ZIP, and Markdown files',
       mimeType: 'text/html;profile=mcp-app',
       _meta: {
         ui: {
@@ -119,16 +119,16 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
-      name: 'open_office_viewer',
-      title: 'Office Viewer',
+      name: 'open_file_viewer',
+      title: 'File Viewer',
       description:
-        'Open the interactive Office Viewer in the Antigravity side pane to preview local Word (.docx), Excel (.xlsx/.xls/.csv/.tsv/.ods), PowerPoint (.pptx), or Markdown (.md) files. Call with no arguments to open the file browser and recent files view.',
+        'Open the interactive File Viewer in the Antigravity side pane to preview local Word (.docx), Excel (.xlsx/.xls/.csv/.tsv/.ods), PowerPoint (.pptx), PDF (.pdf), HTML (.html/.htm), ZIP (.zip), or Markdown (.md) files. Call with no arguments to open the file browser and recent files view.',
       inputSchema: {
         type: 'object',
         properties: {
           filePath: {
             type: 'string',
-            description: 'Optional absolute or ~-prefixed path to a local Office document to preview immediately.',
+            description: 'Optional absolute or ~-prefixed path to a local file to preview immediately.',
           },
         },
       },
@@ -138,8 +138,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         'com.google.antigravity/ui': {
           entrypoints: [
-            { type: 'aux_pane', title: 'Office Viewer' },
-            { type: 'global', title: 'Office Viewer' },
+            { type: 'aux_pane', title: 'File Viewer' },
+            { type: 'global', title: 'File Viewer' },
           ],
         },
       },
@@ -232,7 +232,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
 
   try {
-    if (name === 'open_office_viewer') {
+    if (name === 'open_file_viewer') {
       const recent = await readRecent();
       const homeDir = os.homedir();
       const shortcuts = [
@@ -245,7 +245,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const rawPath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
       if (!rawPath) {
         return {
-          content: [{ type: 'text', text: 'Opened Office Viewer. Select or drop a local .docx, .xlsx, .csv, .pptx, or .md file to preview.' }],
+          content: [{ type: 'text', text: 'Opened File Viewer. Select or drop a local .docx, .xlsx, .csv, .pptx, .pdf, .html, .zip, or .md file to preview.' }],
           structuredContent: {
             mode: 'home',
             recent,
@@ -264,7 +264,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const updatedRecent = await addRecent({ filePath: resolved, fileName, ext, size: stat.size });
 
       return {
-        content: [{ type: 'text', text: `Opened "${fileName}" (${resolved}) in Office Viewer.` }],
+        content: [{ type: 'text', text: `Opened "${fileName}" (${resolved}) in File Viewer.` }],
         structuredContent: {
           mode: 'file',
           filePath: resolved,

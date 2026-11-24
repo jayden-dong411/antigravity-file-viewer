@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "office-viewer": {
+    "file-viewer": {
       "command": "bash",
       "args": ["${PLUGIN_ROOT}/bin/start.sh", "--data-dir=${PLUGIN_DATA}"]
     }

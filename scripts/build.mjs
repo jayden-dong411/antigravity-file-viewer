@@ -564,12 +564,12 @@ const makeHtml = (mode) => `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Office Viewer</title>
+  <title>File Viewer</title>
   <style>${mode === 'sidecar' ? darkModeFallback : ''}${CSS}</style>
 </head>
 <body>
   <div id="app"></div>
-  ${mode === 'sidecar' ? '<script>window.__OFFICE_VIEWER_MODE__="sidecar";</script>' : ''}
+  ${mode === 'sidecar' ? '<script>window.__FILE_VIEWER_MODE__="sidecar";</script>' : ''}
   <script>${jsCode}</script>
 </body>
 </html>`;

@@ -1,8 +1,8 @@
-# Antigravity Office Viewer
+# Antigravity File Viewer
 
 [简体中文](README.md) · **English**
 
-Native **MCP App + Sidecar** plugin for [Google Antigravity](https://antigravity.google/) that previews local Word, Excel, PowerPoint, and Markdown documents directly inside the Antigravity side pane or full-page sidebar view.
+Native **MCP App + Sidecar** universal file viewer plugin for [Google Antigravity](https://antigravity.google/) that previews local **Word, Excel, PowerPoint, PDF, HTML, ZIP archives, and Markdown** files directly inside the Antigravity side pane or full-page sidebar view.
 
 Works natively on **macOS**, **Linux**, and **Windows** using official Antigravity plugin protocols — no DLL injection or patching the host app.
 
@@ -24,8 +24,8 @@ Works natively on **macOS**, **Linux**, and **Windows** using official Antigravi
 - **ZIP Archives** (`.zip`): File tree explorer with sizes, compression ratio, live filename filtering, and inline preview of text, code, and image entries.
 - **Markdown** (`.md`, `.markdown`): Rendered document preview.
 - **Auto-Preview & One-Click Chat Pills**:
-  - Bundled `rules/AGENTS.md` automatically pushes generated or inspected local Office files to Office Viewer.
-  - Supports clickable `sidecar://office-viewer/viewer/?file=<encoded-path>` pill links directly in chat to focus or open the exact file in the side pane.
+  - Bundled `rules/AGENTS.md` automatically pushes generated or inspected local files to File Viewer.
+  - Supports clickable `sidecar://file-viewer/viewer/?file=<encoded-path>` pill links directly in chat to focus or open the exact file in the side pane.
 - **Built-in File Navigation**: Path bar, collapsible local folder browser, recent files history, and drag-and-drop / file picker upload.
 - **Native Theme Integration**: Automatically adapts to Antigravity light and dark themes.
 
@@ -40,8 +40,8 @@ Works natively on **macOS**, **Linux**, and **Windows** using official Antigravi
 Clone directly into your Antigravity global plugins directory:
 
 ```bash
-git clone https://github.com/jayden-dong411/antigravity-office-viewer.git ~/.gemini/config/plugins/office-viewer
-cd ~/.gemini/config/plugins/office-viewer
+git clone https://github.com/jayden-dong411/antigravity-file-viewer.git ~/.gemini/config/plugins/file-viewer
+cd ~/.gemini/config/plugins/file-viewer
 npm install
 npm run build
 ```
@@ -50,10 +50,10 @@ Antigravity automatically discovers plugins in `~/.gemini/config/plugins/`.
 
 ## Usage
 
-1. **Auto-Preview & One-Click Chat Pills**: Whenever the agent creates or inspects a local Office file, it pushes the file to Office Viewer and includes a clickable `sidecar://` pill link in chat.
-2. **Side Pane (`aux_pane`)**: Click the **`+`** button in the Antigravity side pane and choose **Office Viewer**.
-3. **Full Page (`global`)**: Click **Office Viewer** in the left navigation sidebar.
-4. **From Chat**: Ask the agent to preview any local file (e.g. `"Open ~/Documents/report.xlsx in Office Viewer"`).
+1. **Auto-Preview & One-Click Chat Pills**: Whenever the agent creates or inspects a local Office, PDF, HTML, or ZIP file, it pushes the file to File Viewer and includes a clickable `sidecar://` pill link in chat.
+2. **Side Pane (`aux_pane`)**: Click the **`+`** button in the Antigravity side pane and choose **File Viewer**.
+3. **Full Page (`global`)**: Click **File Viewer** in the left navigation sidebar.
+4. **From Chat**: Ask the agent to preview any local file (e.g. `"Open ~/Documents/report.xlsx in File Viewer"`).
 
 ## Development
 

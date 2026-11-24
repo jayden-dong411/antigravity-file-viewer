@@ -1,12 +1,12 @@
 {
-  "name": "office-viewer",
-  "displayName": "Office Viewer",
+  "name": "file-viewer",
+  "displayName": "File Viewer",
   "version": "1.1.0",
   "description": "Preview local Word (.docx), Excel (.xlsx/.xls/.csv/.ods), PowerPoint (.pptx), PDF (.pdf), HTML (.html), ZIP (.zip), and Markdown documents directly in the Antigravity side pane.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
-    "Open Office Viewer in the side pane",
-    "Preview a local .docx or .xlsx file in Office Viewer",
-    "Browse Office documents in my workspace using Office Viewer"
+    "Open File Viewer in the side pane",
+    "Preview a local .docx, .xlsx, .pdf, .html, or .zip file in File Viewer",
+    "Browse documents in my workspace using File Viewer"
   ]
 }

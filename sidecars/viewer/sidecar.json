@@ -3,17 +3,17 @@
   "args": [
     "../../bin/sidecar.sh"
   ],
-  "description": "Interactive Office document viewer for Word (.docx), Excel (.xlsx/.xls/.csv/.ods), PowerPoint (.pptx), and Markdown files",
-  "display_name": "Office Viewer",
+  "description": "Interactive file viewer for Word (.docx), Excel (.xlsx/.xls/.csv/.ods), PowerPoint (.pptx), PDF (.pdf), HTML (.html), ZIP (.zip), and Markdown files",
+  "display_name": "File Viewer",
   "has_web_ui": true,
   "restart_policy": "always",
   "ui_config": {
-    "display_name": "Office Viewer",
+    "display_name": "File Viewer",
     "views": [
       {
         "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
         "path": "/",
-        "title": "Office Viewer"
+        "title": "File Viewer"
       }
     ]
   }

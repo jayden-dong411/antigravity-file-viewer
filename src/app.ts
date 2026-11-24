@@ -68,8 +68,8 @@ type LoadedDoc = {
   recent?: RecentItem[];
 };
 
-const IS_SIDECAR = (window as unknown as { __OFFICE_VIEWER_MODE__?: string }).__OFFICE_VIEWER_MODE__ === 'sidecar';
-const app = IS_SIDECAR ? null : new App({ name: 'Office Viewer', version: '1.0.0' }, {});
+const IS_SIDECAR = (window as unknown as { __FILE_VIEWER_MODE__?: string }).__FILE_VIEWER_MODE__ === 'sidecar';
+const app = IS_SIDECAR ? null : new App({ name: 'File Viewer', version: '1.1.0' }, {});
 let lastActiveUpdatedAt = 0;
 
 async function callBackend(
@@ -459,8 +459,8 @@ async function openZipEntry(entryPath: string) {
 function renderPdf(doc: LoadedDoc): string {
   if (!IS_SIDECAR) {
     return `<div class="empty-inline">
-      <p><strong>PDF preview requires the Office Viewer Sidecar panel.</strong></p>
-      <p class="muted">MCP App iframes enforce a strict CSP that blocks nested PDF viewers. Open this file in the Office Viewer sidecar tab for native PDF viewing.</p>
+      <p><strong>PDF preview requires the File Viewer Sidecar panel.</strong></p>
+      <p class="muted">MCP App iframes enforce a strict CSP that blocks nested PDF viewers. Open this file in the File Viewer sidecar tab for native PDF viewing.</p>
     </div>`;
   }
   const src = doc.filePath
@@ -566,7 +566,7 @@ function renderDocument(): string {
     return `
       <div class="welcome">
         <div class="dropzone" id="dropzone">
-          <div class="drop-title">Office Viewer</div>
+          <div class="drop-title">File Viewer</div>
           <div class="drop-sub">Drop a local <code>.docx</code>, <code>.xlsx</code>, <code>.csv</code>, <code>.pptx</code>, <code>.pdf</code>, <code>.html</code>, <code>.zip</code>, or <code>.md</code> file here, click to choose, or browse folders.</div>
           <div class="drop-actions">
             <button class="btn primary" id="pick-file-btn">Choose File</button>

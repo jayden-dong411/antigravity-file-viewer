@@ -16,8 +16,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = path.resolve(__dirname, '..');
 const HTML_PATH = path.join(PLUGIN_ROOT, 'dist', 'sidecar.html');
 const DATA_DIR =
-  process.env.OFFICE_VIEWER_DATA_DIR ||
-  path.join(os.homedir(), '.gemini', 'antigravity', 'plugin_data', 'office-viewer');
+  process.env.FILE_VIEWER_DATA_DIR ||
+  path.join(os.homedir(), '.gemini', 'antigravity', 'plugin_data', 'file-viewer');
 const RECENT_PATH = path.join(DATA_DIR, 'recent.json');
 const ACTIVE_PATH = path.join(DATA_DIR, 'active.json');
 
@@ -271,7 +271,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, '127.0.0.1', () => {
   const addr = server.address();
   const actualPort = typeof addr === 'object' && addr ? addr.port : PORT;
-  console.log(`[office-viewer-sidecar] Listening on http://127.0.0.1:${actualPort}`);
+  console.log(`[file-viewer-sidecar] Listening on http://127.0.0.1:${actualPort}`);
 });
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
