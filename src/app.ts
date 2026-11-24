@@ -3,6 +3,7 @@ import {
   applyDocumentTheme,
   applyHostStyleVariables,
 } from '@modelcontextprotocol/ext-apps';
+import { init as initPptxPreview } from 'pptx-preview';
 
 type SheetMerge = { sr: number; sc: number; er: number; ec: number };
 type SheetData = {
@@ -14,17 +15,7 @@ type SheetData = {
   truncated: boolean;
 };
 
-type SlideBlock =
-  | { type: 'text' | 'subtitle'; paragraphs: { text: string; level: number }[] }
-  | { type: 'table'; rows: string[][] };
-
-type SlideData = {
-  index: number;
-  title: string;
-  blocks: SlideBlock[];
-  images: string[];
-  notes: string;
-};
+type SlideNote = { index: number; text: string };
 
 type RecentItem = {
   filePath: string;
@@ -45,7 +36,9 @@ type LoadedDoc = {
   html?: string;
   warnings?: string[];
   sheets?: SheetData[];
-  slides?: SlideData[];
+  pptxBase64?: string;
+  slideCount?: number;
+  notes?: SlideNote[];
   recent?: RecentItem[];
 };
 
@@ -80,12 +73,27 @@ async function callBackend(
   };
 }
 
+let pptxPreviewer: ReturnType<typeof initPptxPreview> | null = null;
+let cachedPptxKey = '';
+let cachedPptxBuf: ArrayBuffer | null = null;
+let pptxMountSeq = 0;
+
+function base64ToArrayBuffer(b64: string): ArrayBuffer {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) {
+    bytes[i] = bin.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 const state: {
   doc: LoadedDoc | null;
   activeSheet: number;
   zoom: number;
   search: string;
   showNotes: boolean;
+  pptMode: 'list' | 'slide';
   drawerOpen: boolean;
   currentDir: string;
   parentDir: string | null;
@@ -102,6 +110,7 @@ const state: {
   zoom: 100,
   search: '',
   showNotes: false,
+  pptMode: 'list',
   drawerOpen: false,
   currentDir: '',
   parentDir: null,
@@ -292,69 +301,68 @@ function renderSheet(sheet: SheetData): string {
   return `${formulaBar}<div class="sheet-wrap" style="font-size:${(state.zoom / 100) * 13}px"><table class="excel-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></div>${meta}`;
 }
 
-function renderPptx(slides: SlideData[]): string {
-  if (!slides || slides.length === 0) {
-    return `<div class="empty-inline">No slides found in this presentation.</div>`;
+function renderPptxContainer(doc: LoadedDoc): string {
+  const notesHtml =
+    state.showNotes && doc.notes && doc.notes.length > 0
+      ? `<div class="pptx-notes-panel">
+          <div class="section-title">Speaker Notes</div>
+          ${doc.notes
+            .map(
+              (n) => `<div class="pptx-note-item"><strong>Slide ${n.index}:</strong> ${esc(n.text).replace(/\n/g, '<br>')}</div>`,
+            )
+            .join('')}
+        </div>`
+      : '';
+  return `<div class="pptx-canvas"><div id="pptx-stage" class="pptx-stage"></div>${notesHtml}</div>`;
+}
+
+async function mountPptxPreview() {
+  const seq = ++pptxMountSeq;
+  if (pptxPreviewer) {
+    try {
+      pptxPreviewer.destroy();
+    } catch {
+      // Ignore cleanup errors
+    }
+    pptxPreviewer = null;
   }
-  const query = state.search.trim().toLowerCase();
-  const filtered = query
-    ? slides.filter(
-        (s) =>
-          s.title.toLowerCase().includes(query) ||
-          s.notes.toLowerCase().includes(query) ||
-          s.blocks.some((b) =>
-            b.type === 'table'
-              ? b.rows.some((r) => r.some((c) => c.toLowerCase().includes(query)))
-              : b.paragraphs.some((p) => p.text.toLowerCase().includes(query)),
-          ),
-      )
-    : slides;
+  const doc = state.doc;
+  if (!doc || doc.kind !== 'pptx' || !doc.pptxBase64) return;
+  const stage = document.getElementById('pptx-stage');
+  if (!stage) return;
 
-  const cards = filtered
-    .map((slide) => {
-      const blocksHtml = slide.blocks
-        .map((b) => {
-          if (b.type === 'table') {
-            const rowsHtml = b.rows
-              .map(
-                (r, idx) =>
-                  `<tr>${r
-                    .map((c) => (idx === 0 ? `<th>${esc(c)}</th>` : `<td>${esc(c)}</td>`))
-                    .join('')}</tr>`,
-              )
-              .join('');
-            return `<table class="slide-table">${rowsHtml}</table>`;
-          }
-          const cls = b.type === 'subtitle' ? 'slide-subtitle' : 'slide-list';
-          const items = b.paragraphs
-            .map((p) => `<div class="slide-p lvl-${Math.min(p.level, 3)}">${esc(p.text)}</div>`)
-            .join('');
-          return `<div class="${cls}">${items}</div>`;
-        })
-        .join('');
+  const key = `${doc.filePath || doc.fileName}:${doc.size}`;
+  if (cachedPptxKey !== key || !cachedPptxBuf) {
+    cachedPptxKey = key;
+    cachedPptxBuf = base64ToArrayBuffer(doc.pptxBase64);
+  }
 
-      const imgsHtml = slide.images.length
-        ? `<div class="slide-images">${slide.images.map((src) => `<img src="${src}" alt="Slide media" />`).join('')}</div>`
-        : '';
+  const viewport = document.querySelector('.viewport') as HTMLElement | null;
+  const availW = Math.max((viewport?.clientWidth || 960) - 48, 420);
+  const baseW = Math.min(availW, 960);
+  const width = Math.round(baseW * (state.zoom / 100));
+  const height = Math.round((width * 9) / 16);
 
-      const notesHtml =
-        state.showNotes && slide.notes
-          ? `<div class="slide-notes"><strong>Speaker Notes:</strong><div>${esc(slide.notes).replace(/\n/g, '<br>')}</div></div>`
-          : '';
-
-      return `
-        <article class="slide-card">
-          <div class="slide-head">
-            <span class="slide-num">Slide ${slide.index}</span>
-            <h2 class="slide-title">${esc(slide.title)}</h2>
-          </div>
-          <div class="slide-body">${blocksHtml}${imgsHtml}</div>
-          ${notesHtml}
-        </article>`;
-    })
-    .join('');
-
-  return `<div class="slides-stack" style="zoom:${state.zoom}%">${cards}</div>`;
+  try {
+    const previewer = initPptxPreview(stage, {
+      width,
+      height: state.pptMode === 'slide' ? height : undefined,
+      mode: state.pptMode,
+    });
+    pptxPreviewer = previewer;
+    await previewer.preview(cachedPptxBuf.slice(0));
+    if (seq !== pptxMountSeq) {
+      try {
+        previewer.destroy();
+      } catch {
+        // Stale mount
+      }
+    }
+  } catch (err) {
+    if (seq === pptxMountSeq) {
+      stage.innerHTML = `<div class="banner error">PPTX render error: ${esc(err instanceof Error ? err.message : String(err))}</div>`;
+    }
+  }
 }
 
 function renderDocument(): string {
@@ -434,7 +442,7 @@ function renderDocument(): string {
   }
 
   if (doc.kind === 'pptx') {
-    return renderPptx(doc.slides || []);
+    return renderPptxContainer(doc);
   }
 
   return `<div class="empty-inline">Unsupported document view.</div>`;
@@ -499,8 +507,15 @@ function render() {
                 <span class="muted">${fmtSize(doc.size)}</span>
               </div>
               <div class="controls">
-                <input id="search-input" class="search-input" type="search" value="${esc(state.search)}" placeholder="Filter / search..." />
-                ${doc.kind === 'pptx' ? `<button class="btn sm ${state.showNotes ? 'active' : ''}" id="notes-btn">Notes</button>` : ''}
+                ${doc.kind !== 'pptx' ? `<input id="search-input" class="search-input" type="search" value="${esc(state.search)}" placeholder="Filter / search..." />` : ''}
+                ${
+                  doc.kind === 'pptx'
+                    ? `<button class="btn sm" id="ppt-mode-btn" title="Toggle continuous list / single slide mode">${
+                        state.pptMode === 'list' ? 'Continuous' : 'Single Slide'
+                      }</button>`
+                    : ''
+                }
+                ${doc.kind === 'pptx' && doc.notes && doc.notes.length > 0 ? `<button class="btn sm ${state.showNotes ? 'active' : ''}" id="notes-btn">Notes</button>` : ''}
                 <button class="btn sm" id="zoom-out">-</button>
                 <span class="zoom-label">${state.zoom}%</span>
                 <button class="btn sm" id="zoom-in">+</button>
@@ -524,6 +539,7 @@ function render() {
   `;
 
   bindEvents();
+  void mountPptxPreview();
 }
 
 function bindEvents() {
@@ -586,6 +602,11 @@ function bindEvents() {
 
   document.getElementById('notes-btn')?.addEventListener('click', () => {
     state.showNotes = !state.showNotes;
+    render();
+  });
+
+  document.getElementById('ppt-mode-btn')?.addEventListener('click', () => {
+    state.pptMode = state.pptMode === 'list' ? 'slide' : 'list';
     render();
   });
 

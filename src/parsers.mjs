@@ -149,86 +149,8 @@ async function parsePptx(buffer) {
   });
   slideEntries.sort((a, b) => a.index - b.index);
 
-  const slides = [];
+  const notes = [];
   for (const entry of slideEntries) {
-    const xml = await zip.file(entry.path).async('text');
-    let title = '';
-    const blocks = [];
-    const images = [];
-
-    // Extract shapes (<p:sp>)
-    const shapeMatches = xml.matchAll(/<p:sp\b[\s\S]*?<\/p:sp>/g);
-    for (const sm of shapeMatches) {
-      const spXml = sm[0];
-      const isTitle = /<p:ph[^>]*type="(?:title|ctrTitle)"/.test(spXml);
-      const isSubTitle = /<p:ph[^>]*type="subTitle"/.test(spXml);
-
-      const paragraphs = [];
-      const pMatches = spXml.matchAll(/<a:p\b[\s\S]*?<\/a:p>/g);
-      for (const pm of pMatches) {
-        const pXml = pm[0];
-        const text = extractTextFromXml(pXml).trim();
-        if (!text) continue;
-        const lvlMatch = pXml.match(/<a:pPr[^>]*\blvl="(\d+)"/);
-        const level = lvlMatch ? Number(lvlMatch[1]) : 0;
-        paragraphs.push({ text, level });
-      }
-
-      if (paragraphs.length === 0) continue;
-      if (isTitle && !title) {
-        title = paragraphs.map((p) => p.text).join(' ');
-      } else {
-        blocks.push({
-          type: isSubTitle ? 'subtitle' : 'text',
-          paragraphs,
-        });
-      }
-    }
-
-    // Extract tables (<a:tbl>)
-    const tblMatches = xml.matchAll(/<a:tbl\b[\s\S]*?<\/a:tbl>/g);
-    for (const tm of tblMatches) {
-      const rows = [];
-      const trMatches = tm[0].matchAll(/<a:tr\b[\s\S]*?<\/a:tr>/g);
-      for (const trm of trMatches) {
-        const cells = [];
-        const tcMatches = trm[0].matchAll(/<a:tc\b[\s\S]*?<\/a:tc>/g);
-        for (const tcm of tcMatches) {
-          cells.push(extractTextFromXml(tcm[0]).trim());
-        }
-        if (cells.length > 0) rows.push(cells);
-      }
-      if (rows.length > 0) {
-        blocks.push({ type: 'table', rows });
-      }
-    }
-
-    // Extract embedded images via slide rels
-    const relsPath = `ppt/slides/_rels/slide${entry.index}.xml.rels`;
-    const relsFile = zip.file(relsPath);
-    if (relsFile) {
-      const relsXml = await relsFile.async('text');
-      const relMatches = relsXml.matchAll(/<Relationship\b[^>]*Target="([^"]+)"[^>]*>/g);
-      const seenTargets = new Set();
-      for (const rm of relMatches) {
-        const target = rm[1];
-        if (!target.includes('/media/') && !target.startsWith('../media/')) continue;
-        const mediaPath = path.posix.normalize(path.posix.join('ppt/slides', target));
-        if (seenTargets.has(mediaPath)) continue;
-        seenTargets.add(mediaPath);
-        const mime = mimeFromExt(mediaPath);
-        const mediaFile = zip.file(mediaPath);
-        if (mime && mediaFile) {
-          const b64 = await mediaFile.async('base64');
-          if (b64.length < 3 * 1024 * 1024) {
-            images.push(`data:${mime};base64,${b64}`);
-          }
-        }
-      }
-    }
-
-    // Extract speaker notes
-    let notes = '';
     const notesFile = zip.file(`ppt/notesSlides/notesSlide${entry.index}.xml`);
     if (notesFile) {
       const notesXml = await notesFile.async('text');
@@ -237,19 +159,17 @@ async function parsePptx(buffer) {
         const t = extractTextFromXml(pm[0]).trim();
         if (t && t !== String(entry.index)) noteParts.push(t);
       }
-      notes = noteParts.join('\n');
+      const text = noteParts.join('\n').trim();
+      if (text) notes.push({ index: entry.index, text });
     }
-
-    slides.push({
-      index: entry.index,
-      title: title || `Slide ${entry.index}`,
-      blocks,
-      images,
-      notes,
-    });
   }
 
-  return { kind: 'pptx', slides };
+  return {
+    kind: 'pptx',
+    slideCount: slideEntries.length,
+    pptxBase64: buffer.toString('base64'),
+    notes,
+  };
 }
 
 export async function parseOfficeBuffer(buffer, fileName, options = {}) {

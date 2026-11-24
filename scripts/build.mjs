@@ -356,58 +356,43 @@ input[type="text"]:focus, input[type="search"]:focus {
   flex-shrink: 0;
 }
 
-/* Slides */
-.slides-stack {
+/* PPTX canvas (pptx-preview) */
+.pptx-canvas {
   padding: 20px 16px 40px;
-  background: var(--color-background-secondary, #f3f4f6);
+  background: var(--color-background-secondary, #eef1f5);
+  min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 18px;
   align-items: center;
-  min-height: 100%;
+  gap: 18px;
 }
-.slide-card {
+.pptx-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
-  max-width: 820px;
+}
+.pptx-stage .pptx-preview-wrapper {
+  background: transparent !important;
+}
+.pptx-stage .pptx-preview-slide-wrapper {
+  margin: 0 auto 18px auto !important;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  background: #ffffff;
+}
+.pptx-notes-panel {
+  width: 100%;
+  max-width: 960px;
   background: var(--color-background-primary, #ffffff);
   border: 1px solid var(--color-border-primary, #d0d7de);
-  border-radius: 10px;
-  padding: 24px 28px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  border-radius: 8px;
+  padding: 14px 18px;
 }
-.slide-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--color-border-primary, #d0d7de);
-  padding-bottom: 8px;
-}
-.slide-num {
-  font-size: 11px;
-  font-weight: 700;
-  color: #ea580c;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-.slide-title { margin: 0; font-size: 18px; }
-.slide-subtitle { color: var(--color-text-secondary, #656d76); font-size: 14px; margin-bottom: 10px; }
-.slide-list { margin-bottom: 12px; }
-.slide-p { margin: 4px 0; }
-.slide-p.lvl-1 { padding-left: 18px; }
-.slide-p.lvl-2 { padding-left: 36px; }
-.slide-p.lvl-3 { padding-left: 54px; }
-.slide-table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 12px; }
-.slide-table th, .slide-table td { border: 1px solid var(--color-border-primary, #d0d7de); padding: 6px 8px; text-align: left; }
-.slide-table th { background: var(--color-background-secondary, #f6f8fa); }
-.slide-images { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-.slide-images img { max-width: 100%; max-height: 360px; border-radius: 6px; border: 1px solid var(--color-border-primary, #d0d7de); }
-.slide-notes {
-  margin-top: 14px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: var(--color-background-secondary, #f6f8fa);
+.pptx-note-item {
   font-size: 12px;
+  margin-top: 6px;
   color: var(--color-text-secondary, #656d76);
 }
 .empty-inline { padding: 24px; text-align: center; color: var(--color-text-secondary, #656d76); }
