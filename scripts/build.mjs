@@ -422,21 +422,42 @@ const result = await esbuild.build({
   write: false,
 });
 
-const jsCode = result.outputFiles[0].text;
-const html = `<!doctype html>
+const jsCode = result.outputFiles[0].text.replace(/<\/script>/gi, '<\\/script>');
+const darkModeFallback = `
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background-primary: #16181d;
+    --color-background-secondary: #1e2128;
+    --color-background-tertiary: #282c34;
+    --color-text-primary: #e6edf3;
+    --color-text-secondary: #9aa4b2;
+    --color-border-primary: #30363d;
+  }
+}
+`;
+
+const makeHtml = (mode) => `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Office Viewer</title>
-  <style>${CSS}</style>
+  <style>${mode === 'sidecar' ? darkModeFallback : ''}${CSS}</style>
 </head>
 <body>
   <div id="app"></div>
-  <script>${jsCode.replace(/<\/script>/gi, '<\\/script>')}</script>
+  ${mode === 'sidecar' ? '<script>window.__OFFICE_VIEWER_MODE__="sidecar";</script>' : ''}
+  <script>${jsCode}</script>
 </body>
 </html>`;
 
 await fs.mkdir(path.join(ROOT, 'dist'), { recursive: true });
-await fs.writeFile(path.join(ROOT, 'dist', 'app.html'), html, 'utf8');
-console.log(`Built dist/app.html (${(Buffer.byteLength(html) / 1024).toFixed(1)} KB)`);
+const appHtml = makeHtml('mcp-app');
+const sidecarHtml = makeHtml('sidecar');
+await fs.writeFile(path.join(ROOT, 'dist', 'app.html'), appHtml, 'utf8');
+await fs.writeFile(path.join(ROOT, 'dist', 'sidecar.html'), sidecarHtml, 'utf8');
+console.log(
+  `Built dist/app.html (${(Buffer.byteLength(appHtml) / 1024).toFixed(1)} KB) and dist/sidecar.html (${(
+    Buffer.byteLength(sidecarHtml) / 1024
+  ).toFixed(1)} KB)`,
+);

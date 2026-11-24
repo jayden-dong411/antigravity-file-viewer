@@ -32,9 +32,10 @@ Antigravity automatically discovers plugins in `~/.gemini/config/plugins/`.
 
 ## Usage
 
-1. **Side Pane (`aux_pane`)**: Click the **`+`** button in the Antigravity side pane and choose **Office Viewer**.
-2. **Full Page (`global`)**: Click **Office Viewer** in the left navigation sidebar.
-3. **From Chat**: Ask the agent to preview any local file (e.g. `"Open ~/Documents/report.xlsx in Office Viewer"`).
+1. **Auto-Preview & One-Click Chat Pills**: Included `rules/AGENTS.md` instructs Antigravity to automatically push generated or inspected local Office files into Office Viewer and display a one-click `sidecar://office-viewer/viewer/?file=...` pill link in chat.
+2. **Side Pane (`aux_pane`)**: Click the **`+`** button in the Antigravity side pane and choose **Office Viewer**.
+3. **Full Page (`global`)**: Click **Office Viewer** in the left navigation sidebar.
+4. **From Chat**: Ask the agent to preview any local file (e.g. `"Open ~/Documents/report.xlsx in Office Viewer"`).
 
 ## Development
 

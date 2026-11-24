@@ -30,6 +30,7 @@ function parseDataDir() {
 
 const DATA_DIR = parseDataDir();
 const RECENT_PATH = path.join(DATA_DIR, 'recent.json');
+const ACTIVE_PATH = path.join(DATA_DIR, 'active.json');
 
 async function readRecent() {
   try {
@@ -57,6 +58,11 @@ async function addRecent(entry) {
       ...filtered,
     ].slice(0, 15);
     await fs.writeFile(RECENT_PATH, JSON.stringify(next, null, 2), 'utf8');
+    await fs.writeFile(
+      ACTIVE_PATH,
+      JSON.stringify({ filePath: entry.filePath, fileName: entry.fileName, updatedAt: Date.now() }, null, 2),
+      'utf8',
+    );
     return next;
   } catch {
     return [];

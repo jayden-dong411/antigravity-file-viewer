@@ -1,0 +1,20 @@
+{
+  "command": "bash",
+  "args": [
+    "../../bin/sidecar.sh"
+  ],
+  "description": "Interactive Office document viewer for Word (.docx), Excel (.xlsx/.xls/.csv/.ods), PowerPoint (.pptx), and Markdown files",
+  "display_name": "Office Viewer",
+  "has_web_ui": true,
+  "restart_policy": "always",
+  "ui_config": {
+    "display_name": "Office Viewer",
+    "views": [
+      {
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
+        "path": "/",
+        "title": "Office Viewer"
+      }
+    ]
+  }
+}

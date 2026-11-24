@@ -49,7 +49,36 @@ type LoadedDoc = {
   recent?: RecentItem[];
 };
 
-const app = new App({ name: 'Office Viewer', version: '1.0.0' }, {});
+const IS_SIDECAR = (window as unknown as { __OFFICE_VIEWER_MODE__?: string }).__OFFICE_VIEWER_MODE__ === 'sidecar';
+const app = IS_SIDECAR ? null : new App({ name: 'Office Viewer', version: '1.0.0' }, {});
+let lastActiveUpdatedAt = 0;
+
+async function callBackend(
+  toolName: 'app_load_file' | 'app_parse_upload' | 'app_browse_directory' | 'app_get_recent',
+  args: Record<string, unknown>,
+): Promise<{ isError?: boolean; structuredContent?: Record<string, unknown> }> {
+  if (IS_SIDECAR) {
+    const endpointMap: Record<typeof toolName, { method: string; url: string }> = {
+      app_load_file: { method: 'POST', url: '/api/load' },
+      app_parse_upload: { method: 'POST', url: '/api/upload' },
+      app_browse_directory: { method: 'POST', url: '/api/browse' },
+      app_get_recent: { method: 'GET', url: '/api/state' },
+    };
+    const ep = endpointMap[toolName];
+    const resp = await fetch(ep.url, {
+      method: ep.method,
+      headers: ep.method === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
+      body: ep.method === 'POST' ? JSON.stringify(args) : undefined,
+    });
+    const json = (await resp.json()) as Record<string, unknown>;
+    return { isError: !resp.ok || Boolean(json.error), structuredContent: json };
+  }
+  const res = await app!.callServerTool({ name: toolName, arguments: args });
+  return {
+    isError: res.isError,
+    structuredContent: (res.structuredContent || {}) as Record<string, unknown>,
+  };
+}
 
 const state: {
   doc: LoadedDoc | null;
@@ -129,11 +158,8 @@ async function loadFileByPath(filePath: string) {
   state.selectedCell = null;
   render();
   try {
-    const res = await app.callServerTool({
-      name: 'app_load_file',
-      arguments: { filePath: filePath.trim() },
-    });
-    const sc = (res.structuredContent || {}) as Record<string, unknown>;
+    const res = await callBackend('app_load_file', { filePath: filePath.trim() });
+    const sc = res.structuredContent || {};
     if (res.isError || sc.error) {
       state.error = String(sc.error || 'Failed to load file');
     } else {
@@ -165,11 +191,8 @@ async function handleFileUpload(file: File) {
       binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
     }
     const base64 = btoa(binary);
-    const res = await app.callServerTool({
-      name: 'app_parse_upload',
-      arguments: { fileName: file.name, base64 },
-    });
-    const sc = (res.structuredContent || {}) as Record<string, unknown>;
+    const res = await callBackend('app_parse_upload', { fileName: file.name, base64 });
+    const sc = res.structuredContent || {};
     if (res.isError || sc.error) {
       state.error = String(sc.error || 'Failed to parse file');
     } else {
@@ -188,11 +211,8 @@ async function handleFileUpload(file: File) {
 
 async function browseDir(dirPath?: string) {
   try {
-    const res = await app.callServerTool({
-      name: 'app_browse_directory',
-      arguments: dirPath ? { dirPath } : {},
-    });
-    const sc = (res.structuredContent || {}) as Record<string, unknown>;
+    const res = await callBackend('app_browse_directory', dirPath ? { dirPath } : {});
+    const sc = res.structuredContent || {};
     if (!res.isError && sc.dirPath) {
       state.currentDir = String(sc.dirPath);
       state.parentDir = sc.parentPath ? String(sc.parentPath) : null;
@@ -570,7 +590,7 @@ function bindEvents() {
   });
 
   document.getElementById('attach-btn')?.addEventListener('click', async () => {
-    if (!state.doc?.filePath) return;
+    if (!state.doc?.filePath || !app) return;
     try {
       await app.updateModelContext({
         content: [{ type: 'text', text: `Currently previewing Office document: ${state.doc.filePath}` }],
@@ -650,47 +670,93 @@ function bindEvents() {
   };
 }
 
-// Register handlers BEFORE app.connect() so no initial notification is missed
-app.ontoolinput = ({ arguments: args }) => {
-  const filePath = (args as Record<string, unknown> | undefined)?.filePath;
-  if (typeof filePath === 'string' && filePath.trim()) {
-    state.loading = true;
+if (app) {
+  // Register handlers BEFORE app.connect() so no initial notification is missed
+  app.ontoolinput = ({ arguments: args }) => {
+    const filePath = (args as Record<string, unknown> | undefined)?.filePath;
+    if (typeof filePath === 'string' && filePath.trim()) {
+      state.loading = true;
+      render();
+    }
+  };
+
+  app.ontoolresult = (result) => {
+    const sc = (result.structuredContent || {}) as Record<string, unknown>;
+    if (Array.isArray(sc.recent)) state.recent = sc.recent as RecentItem[];
+    if (Array.isArray(sc.shortcuts)) state.shortcuts = sc.shortcuts as Shortcut[];
+
+    if (result.isError || sc.error) {
+      state.loading = false;
+      state.error = String(sc.error || 'Error opening document');
+      render();
+      return;
+    }
+
+    if (sc.mode === 'file' && typeof sc.filePath === 'string') {
+      void loadFileByPath(sc.filePath);
+    } else {
+      state.loading = false;
+      render();
+    }
+  };
+
+  app.onhostcontextchanged = (ctx) => {
+    if (ctx.theme) applyDocumentTheme(ctx.theme);
+    if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
+  };
+}
+
+async function initSidecar() {
+  const params = new URLSearchParams(window.location.search);
+  const requestedFile = params.get('file');
+  try {
+    const res = await callBackend('app_get_recent', {});
+    const sc = res.structuredContent || {};
+    if (Array.isArray(sc.recent)) state.recent = sc.recent as RecentItem[];
+    if (Array.isArray(sc.shortcuts)) state.shortcuts = sc.shortcuts as Shortcut[];
+    const active = sc.active as { filePath?: string; updatedAt?: number } | null;
+    if (active?.updatedAt) lastActiveUpdatedAt = active.updatedAt;
+
+    if (requestedFile) {
+      await loadFileByPath(requestedFile);
+    } else if (active?.filePath) {
+      await loadFileByPath(active.filePath);
+    } else {
+      render();
+    }
+  } catch {
     render();
   }
-};
 
-app.ontoolresult = (result) => {
-  const sc = (result.structuredContent || {}) as Record<string, unknown>;
-  if (Array.isArray(sc.recent)) state.recent = sc.recent as RecentItem[];
-  if (Array.isArray(sc.shortcuts)) state.shortcuts = sc.shortcuts as Shortcut[];
-
-  if (result.isError || sc.error) {
-    state.loading = false;
-    state.error = String(sc.error || 'Error opening document');
-    render();
-    return;
-  }
-
-  if (sc.mode === 'file' && typeof sc.filePath === 'string') {
-    void loadFileByPath(sc.filePath);
-  } else {
-    state.loading = false;
-    render();
-  }
-};
-
-app.onhostcontextchanged = (ctx) => {
-  if (ctx.theme) applyDocumentTheme(ctx.theme);
-  if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
-};
+  // Live-sync when agent opens a new document via open_office_viewer
+  window.setInterval(async () => {
+    try {
+      const res = await callBackend('app_get_recent', {});
+      const sc = res.structuredContent || {};
+      const active = sc.active as { filePath?: string; updatedAt?: number } | null;
+      if (active?.filePath && active.updatedAt && active.updatedAt > lastActiveUpdatedAt) {
+        lastActiveUpdatedAt = active.updatedAt;
+        if (active.filePath !== state.doc?.filePath) {
+          await loadFileByPath(active.filePath);
+        }
+      }
+    } catch {
+      // Ignore transient poll errors
+    }
+  }, 2000);
+}
 
 async function init() {
   render();
-  await app.connect();
-  const ctx = app.getHostContext();
+  if (IS_SIDECAR) {
+    await initSidecar();
+    return;
+  }
+  await app!.connect();
+  const ctx = app!.getHostContext();
   if (ctx?.theme) applyDocumentTheme(ctx.theme);
   if (ctx?.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
-  const caps = app.getHostCapabilities();
+  const caps = app!.getHostCapabilities();
   state.canUpdateContext = Boolean(caps?.updateModelContext);
   render();
 }
