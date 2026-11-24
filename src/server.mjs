@@ -14,6 +14,8 @@ import {
   browseDirectory,
   expandPath,
   loadOfficeFile,
+  loadZipEntry,
+  loadZipEntryFromBuffer,
   parseOfficeBuffer,
 } from './parsers.mjs';
 
@@ -178,6 +180,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'app_load_zip_entry',
+      description: 'App-only tool: preview a specific file inside a .zip archive.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: { type: 'string' },
+          base64: { type: 'string' },
+          entryPath: { type: 'string' },
+        },
+        required: ['entryPath'],
+      },
+      _meta: {
+        ui: {
+          visibility: ['app'],
+        },
+      },
+    },
+    {
       name: 'app_browse_directory',
       description: 'App-only tool: list folders and supported Office files inside a local directory.',
       inputSchema: {
@@ -279,6 +299,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           size: buffer.length,
           ...parsed,
         },
+      };
+    }
+
+    if (name === 'app_load_zip_entry') {
+      const entry = args.base64
+        ? await loadZipEntryFromBuffer(Buffer.from(String(args.base64), 'base64'), String(args.entryPath || ''))
+        : await loadZipEntry(String(args.filePath || ''), String(args.entryPath || ''));
+      return {
+        content: [{ type: 'text', text: `Loaded archive entry ${args.entryPath}` }],
+        structuredContent: entry,
       };
     }
 

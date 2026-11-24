@@ -1,11 +1,11 @@
 ---
 name: office-viewer
-description: Preview local Office documents (.docx, .xlsx, .xls, .csv, .tsv, .ods, .pptx, .md) directly inside the Antigravity side pane using the Office Viewer MCP App.
+description: Preview local Office documents (.docx, .xlsx, .xls, .csv, .tsv, .ods, .pptx), PDF (.pdf), HTML (.html/.htm), ZIP archives (.zip), and Markdown (.md) directly inside the Antigravity side pane using the Office Viewer MCP App and Sidecar.
 ---
 
 # Office Viewer
 
-Use the `office-viewer` MCP server's `open_office_viewer` tool whenever the user wants to preview or inspect a local Word (`.docx`), Excel/spreadsheet (`.xlsx`, `.xls`, `.xlsm`, `.csv`, `.tsv`, `.ods`), PowerPoint (`.pptx`), or Markdown (`.md`) file directly inside Antigravity.
+Use the `office-viewer` MCP server's `open_office_viewer` tool whenever the user wants to preview or inspect a local Word (`.docx`), Excel/spreadsheet (`.xlsx`, `.xls`, `.xlsm`, `.csv`, `.tsv`, `.ods`), PowerPoint (`.pptx`), PDF (`.pdf`), HTML (`.html`, `.htm`), ZIP archive (`.zip`), or Markdown (`.md`) file directly inside Antigravity.
 
 ## Usage
 

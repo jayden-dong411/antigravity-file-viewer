@@ -16,6 +16,24 @@ type SheetData = {
 };
 
 type SlideNote = { index: number; text: string };
+type ZipEntry = {
+  path: string;
+  name: string;
+  dir: string;
+  isDir: boolean;
+  ext: string;
+  size: number;
+  compressedSize: number;
+  date: string;
+};
+type ZipPreview = {
+  entryPath: string;
+  previewType: 'text' | 'image' | 'binary';
+  size: number;
+  text?: string;
+  dataUrl?: string;
+  message?: string;
+};
 
 type RecentItem = {
   filePath: string;
@@ -32,13 +50,21 @@ type LoadedDoc = {
   fileName: string;
   ext: string;
   size: number;
-  kind: 'docx' | 'sheet' | 'pptx' | 'markdown';
+  kind: 'docx' | 'sheet' | 'pptx' | 'markdown' | 'pdf' | 'html' | 'zip';
   html?: string;
   warnings?: string[];
   sheets?: SheetData[];
   pptxBase64?: string;
   slideCount?: number;
   notes?: SlideNote[];
+  pdfBase64?: string;
+  source?: string;
+  siteUrl?: string;
+  entries?: ZipEntry[];
+  fileCount?: number;
+  dirCount?: number;
+  totalSize?: number;
+  totalCompressed?: number;
   recent?: RecentItem[];
 };
 
@@ -47,7 +73,7 @@ const app = IS_SIDECAR ? null : new App({ name: 'Office Viewer', version: '1.0.0
 let lastActiveUpdatedAt = 0;
 
 async function callBackend(
-  toolName: 'app_load_file' | 'app_parse_upload' | 'app_browse_directory' | 'app_get_recent',
+  toolName: 'app_load_file' | 'app_parse_upload' | 'app_browse_directory' | 'app_get_recent' | 'app_load_zip_entry',
   args: Record<string, unknown>,
 ): Promise<{ isError?: boolean; structuredContent?: Record<string, unknown> }> {
   if (IS_SIDECAR) {
@@ -56,6 +82,7 @@ async function callBackend(
       app_parse_upload: { method: 'POST', url: '/api/upload' },
       app_browse_directory: { method: 'POST', url: '/api/browse' },
       app_get_recent: { method: 'GET', url: '/api/state' },
+      app_load_zip_entry: { method: 'POST', url: '/api/zip-entry' },
     };
     const ep = endpointMap[toolName];
     const resp = await fetch(ep.url, {
@@ -77,6 +104,19 @@ let pptxPreviewer: ReturnType<typeof initPptxPreview> | null = null;
 let cachedPptxKey = '';
 let cachedPptxBuf: ArrayBuffer | null = null;
 let pptxMountSeq = 0;
+let uploadedBlobUrl = '';
+let uploadedZipBase64 = '';
+
+function setPdfBlobUrl(b64?: string): string {
+  if (uploadedBlobUrl) {
+    URL.revokeObjectURL(uploadedBlobUrl);
+    uploadedBlobUrl = '';
+  }
+  if (!b64) return '';
+  const buf = base64ToArrayBuffer(b64);
+  uploadedBlobUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
+  return uploadedBlobUrl;
+}
 
 function base64ToArrayBuffer(b64: string): ArrayBuffer {
   const bin = atob(b64);
@@ -94,6 +134,10 @@ const state: {
   search: string;
   showNotes: boolean;
   pptMode: 'list' | 'slide';
+  htmlMode: 'preview' | 'source';
+  htmlViewport: '100%' | '768px' | '390px';
+  zipPreview: ZipPreview | null;
+  zipPreviewLoading: boolean;
   drawerOpen: boolean;
   currentDir: string;
   parentDir: string | null;
@@ -111,6 +155,10 @@ const state: {
   search: '',
   showNotes: false,
   pptMode: 'list',
+  htmlMode: 'preview',
+  htmlViewport: '100%',
+  zipPreview: null,
+  zipPreviewLoading: false,
   drawerOpen: false,
   currentDir: '',
   parentDir: null,
@@ -153,6 +201,9 @@ function badgeClass(ext: string): string {
   if (e === '.docx' || e === '.dotx') return 'badge-word';
   if (['.xlsx', '.xls', '.xlsm', '.xlsb', '.csv', '.tsv', '.ods'].includes(e)) return 'badge-excel';
   if (e === '.pptx' || e === '.pptm') return 'badge-ppt';
+  if (e === '.pdf') return 'badge-pdf';
+  if (e === '.html' || e === '.htm') return 'badge-html';
+  if (e === '.zip') return 'badge-zip';
   return 'badge-md';
 }
 
@@ -175,6 +226,9 @@ async function loadFileByPath(filePath: string) {
       state.doc = sc as unknown as LoadedDoc;
       state.activeSheet = 0;
       state.search = '';
+      state.zipPreview = null;
+      uploadedZipBase64 = '';
+      if (state.doc.kind === 'pdf') setPdfBlobUrl(undefined);
       if (Array.isArray(sc.recent)) state.recent = sc.recent as RecentItem[];
       state.drawerOpen = false;
     }
@@ -208,6 +262,9 @@ async function handleFileUpload(file: File) {
       state.doc = sc as unknown as LoadedDoc;
       state.activeSheet = 0;
       state.search = '';
+      state.zipPreview = null;
+      uploadedZipBase64 = state.doc.kind === 'zip' ? base64 : '';
+      if (state.doc.kind === 'pdf' && state.doc.pdfBase64) setPdfBlobUrl(state.doc.pdfBase64);
       state.drawerOpen = false;
     }
   } catch (err) {
@@ -365,6 +422,114 @@ async function mountPptxPreview() {
   }
 }
 
+async function openZipEntry(entryPath: string) {
+  const doc = state.doc;
+  if (!doc || doc.kind !== 'zip') return;
+  state.zipPreviewLoading = true;
+  render();
+  try {
+    const args: Record<string, unknown> = { entryPath };
+    if (doc.filePath) args.filePath = doc.filePath;
+    else if (uploadedZipBase64) args.base64 = uploadedZipBase64;
+    const res = await callBackend('app_load_zip_entry', args);
+    const sc = res.structuredContent || {};
+    if (res.isError || sc.error) {
+      state.zipPreview = {
+        entryPath,
+        previewType: 'binary',
+        size: 0,
+        message: String(sc.error || 'Failed to preview entry'),
+      };
+    } else {
+      state.zipPreview = sc as unknown as ZipPreview;
+    }
+  } catch (err) {
+    state.zipPreview = {
+      entryPath,
+      previewType: 'binary',
+      size: 0,
+      message: err instanceof Error ? err.message : String(err),
+    };
+  } finally {
+    state.zipPreviewLoading = false;
+    render();
+  }
+}
+
+function renderPdf(doc: LoadedDoc): string {
+  if (!IS_SIDECAR) {
+    return `<div class="empty-inline">
+      <p><strong>PDF preview requires the Office Viewer Sidecar panel.</strong></p>
+      <p class="muted">MCP App iframes enforce a strict CSP that blocks nested PDF viewers. Open this file in the Office Viewer sidecar tab for native PDF viewing.</p>
+    </div>`;
+  }
+  const src = doc.filePath
+    ? `/api/raw?file=${encodeURIComponent(doc.filePath)}`
+    : uploadedBlobUrl;
+  if (!src) return `<div class="empty-inline">Unable to load PDF stream.</div>`;
+  return `<div class="pdf-stage"><iframe class="pdf-frame" src="${esc(src)}" title="${esc(doc.fileName)}"></iframe></div>`;
+}
+
+function renderHtmlDoc(doc: LoadedDoc): string {
+  if (state.htmlMode === 'source' || !IS_SIDECAR) {
+    return `<div class="html-source-wrap"><pre class="code-view"><code>${esc(doc.source || '')}</code></pre></div>`;
+  }
+  const widthStyle = state.htmlViewport === '100%' ? 'width:100%' : `width:${state.htmlViewport}`;
+  if (doc.siteUrl) {
+    return `<div class="html-stage"><iframe class="html-frame" style="${widthStyle}" src="${esc(doc.siteUrl)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" title="${esc(doc.fileName)}"></iframe></div>`;
+  }
+  return `<div class="html-stage"><iframe class="html-frame" style="${widthStyle}" srcdoc="${esc(doc.source || '')}" sandbox="allow-scripts allow-same-origin" title="${esc(doc.fileName)}"></iframe></div>`;
+}
+
+function renderZip(doc: LoadedDoc): string {
+  const entries = doc.entries || [];
+  const query = state.search.trim().toLowerCase();
+  const filtered = query
+    ? entries.filter((e) => e.path.toLowerCase().includes(query))
+    : entries;
+
+  const listHtml = filtered
+    .map((e) => {
+      if (e.isDir) {
+        return `<div class="zip-item dir"><span class="icon-dir">DIR</span><span class="zip-path">${esc(e.path)}</span></div>`;
+      }
+      const active = state.zipPreview?.entryPath === e.path ? 'active' : '';
+      return `<button class="zip-item file ${active}" data-zip-entry="${esc(e.path)}">
+        <span class="badge ${badgeClass(e.ext)}">${badgeLabel(e.ext)}</span>
+        <span class="zip-path" title="${esc(e.path)}">${esc(e.path)}</span>
+        <span class="file-size">${fmtSize(e.size)}</span>
+      </button>`;
+    })
+    .join('');
+
+  let previewHtml = `<div class="empty-inline">Click any file in the archive to preview its contents.</div>`;
+  if (state.zipPreviewLoading) {
+    previewHtml = `<div class="empty-inline">Loading archive entry...</div>`;
+  } else if (state.zipPreview) {
+    const p = state.zipPreview;
+    if (p.previewType === 'image' && p.dataUrl) {
+      previewHtml = `<div class="zip-preview-head"><strong>${esc(p.entryPath)}</strong><span class="muted">${fmtSize(p.size)}</span></div>
+        <div class="zip-img-wrap"><img src="${p.dataUrl}" alt="${esc(p.entryPath)}" /></div>`;
+    } else if (p.previewType === 'text') {
+      previewHtml = `<div class="zip-preview-head"><strong>${esc(p.entryPath)}</strong><span class="muted">${fmtSize(p.size)}</span></div>
+        <pre class="code-view"><code>${esc(p.text || '')}</code></pre>`;
+    } else {
+      previewHtml = `<div class="zip-preview-head"><strong>${esc(p.entryPath)}</strong></div>
+        <div class="empty-inline">${esc(p.message || 'Binary file')}</div>`;
+    }
+  }
+
+  const ratio = doc.totalSize ? Math.round((1 - (doc.totalCompressed || 0) / doc.totalSize) * 100) : 0;
+  return `
+    <div class="zip-layout">
+      <div class="zip-pane">
+        <div class="zip-summary">${doc.fileCount || 0} files · ${doc.dirCount || 0} folders · ${fmtSize(doc.totalSize || 0)} (${ratio}% saved)</div>
+        <div class="zip-list">${listHtml || '<div class="empty-inline">No matching entries.</div>'}</div>
+      </div>
+      <div class="zip-preview">${previewHtml}</div>
+    </div>`;
+}
+
 function renderDocument(): string {
   const doc = state.doc;
   if (!doc) {
@@ -402,7 +567,7 @@ function renderDocument(): string {
       <div class="welcome">
         <div class="dropzone" id="dropzone">
           <div class="drop-title">Office Viewer</div>
-          <div class="drop-sub">Drop a local <code>.docx</code>, <code>.xlsx</code>, <code>.csv</code>, <code>.pptx</code>, or <code>.md</code> file here, click to choose, or browse folders.</div>
+          <div class="drop-sub">Drop a local <code>.docx</code>, <code>.xlsx</code>, <code>.csv</code>, <code>.pptx</code>, <code>.pdf</code>, <code>.html</code>, <code>.zip</code>, or <code>.md</code> file here, click to choose, or browse folders.</div>
           <div class="drop-actions">
             <button class="btn primary" id="pick-file-btn">Choose File</button>
             <button class="btn" id="open-drawer-btn">Browse Folders</button>
@@ -443,6 +608,18 @@ function renderDocument(): string {
 
   if (doc.kind === 'pptx') {
     return renderPptxContainer(doc);
+  }
+
+  if (doc.kind === 'pdf') {
+    return renderPdf(doc);
+  }
+
+  if (doc.kind === 'html') {
+    return renderHtmlDoc(doc);
+  }
+
+  if (doc.kind === 'zip') {
+    return renderZip(doc);
   }
 
   return `<div class="empty-inline">Unsupported document view.</div>`;
@@ -494,7 +671,7 @@ function render() {
           <input id="path-input" type="text" value="${esc(pathVal)}" placeholder="Enter local file path (e.g. ~/Documents/report.docx)..." />
           <button class="btn sm primary" type="submit">Open</button>
         </form>
-        <input id="file-input" type="file" accept=".docx,.dotx,.xlsx,.xls,.xlsm,.xlsb,.csv,.tsv,.ods,.pptx,.pptm,.md,.markdown" hidden />
+        <input id="file-input" type="file" accept=".docx,.dotx,.xlsx,.xls,.xlsm,.xlsb,.csv,.tsv,.ods,.pptx,.pptm,.md,.markdown,.pdf,.html,.htm,.zip" hidden />
         <button class="btn sm" id="upload-btn" title="Choose a local file">Upload</button>
         ${doc?.filePath ? `<button class="btn sm" id="reload-btn" title="Reload from disk">Reload</button>` : ''}
       </div>
@@ -507,7 +684,7 @@ function render() {
                 <span class="muted">${fmtSize(doc.size)}</span>
               </div>
               <div class="controls">
-                ${doc.kind !== 'pptx' ? `<input id="search-input" class="search-input" type="search" value="${esc(state.search)}" placeholder="Filter / search..." />` : ''}
+                ${doc.kind !== 'pptx' && doc.kind !== 'pdf' && doc.kind !== 'html' ? `<input id="search-input" class="search-input" type="search" value="${esc(state.search)}" placeholder="Filter / search..." />` : ''}
                 ${
                   doc.kind === 'pptx'
                     ? `<button class="btn sm" id="ppt-mode-btn" title="Toggle continuous list / single slide mode">${
@@ -515,10 +692,27 @@ function render() {
                       }</button>`
                     : ''
                 }
+                ${
+                  doc.kind === 'html'
+                    ? `<button class="btn sm ${state.htmlMode === 'preview' ? 'active' : ''}" id="html-preview-btn">Preview</button>
+                       <button class="btn sm ${state.htmlMode === 'source' ? 'active' : ''}" id="html-source-btn">Source</button>
+                       ${
+                         state.htmlMode === 'preview'
+                           ? `<button class="btn sm ${state.htmlViewport === '100%' ? 'active' : ''}" data-vp="100%">Desktop</button>
+                              <button class="btn sm ${state.htmlViewport === '768px' ? 'active' : ''}" data-vp="768px">Tablet</button>
+                              <button class="btn sm ${state.htmlViewport === '390px' ? 'active' : ''}" data-vp="390px">Mobile</button>`
+                           : ''
+                       }`
+                    : ''
+                }
                 ${doc.kind === 'pptx' && doc.notes && doc.notes.length > 0 ? `<button class="btn sm ${state.showNotes ? 'active' : ''}" id="notes-btn">Notes</button>` : ''}
-                <button class="btn sm" id="zoom-out">-</button>
-                <span class="zoom-label">${state.zoom}%</span>
-                <button class="btn sm" id="zoom-in">+</button>
+                ${
+                  doc.kind !== 'pdf' && doc.kind !== 'html' && doc.kind !== 'zip'
+                    ? `<button class="btn sm" id="zoom-out">-</button>
+                       <span class="zoom-label">${state.zoom}%</span>
+                       <button class="btn sm" id="zoom-in">+</button>`
+                    : ''
+                }
                 ${
                   state.canUpdateContext && doc.filePath
                     ? `<button class="btn sm" id="attach-btn" title="Attach file path to your next chat message">Attach</button>`
@@ -608,6 +802,31 @@ function bindEvents() {
   document.getElementById('ppt-mode-btn')?.addEventListener('click', () => {
     state.pptMode = state.pptMode === 'list' ? 'slide' : 'list';
     render();
+  });
+
+  document.getElementById('html-preview-btn')?.addEventListener('click', () => {
+    state.htmlMode = 'preview';
+    render();
+  });
+  document.getElementById('html-source-btn')?.addEventListener('click', () => {
+    state.htmlMode = 'source';
+    render();
+  });
+  document.querySelectorAll<HTMLElement>('[data-vp]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const vp = el.getAttribute('data-vp') as '100%' | '768px' | '390px';
+      if (vp) {
+        state.htmlViewport = vp;
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-zip-entry]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const p = el.getAttribute('data-zip-entry');
+      if (p) void openZipEntry(p);
+    });
   });
 
   document.getElementById('attach-btn')?.addEventListener('click', async () => {

@@ -18,7 +18,10 @@ Works natively on **macOS**, **Linux**, and **Windows** using official Antigravi
 
 - **Word** (`.docx`, `.dotx`): Clean document paper layout with headings, tables, and embedded images.
 - **Excel & Spreadsheets** (`.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.csv`, `.tsv`, `.ods`): Multi-sheet tabs, sticky row/column headers, merged cell support, cell value inspector bar, and live row filtering.
-- **PowerPoint** (`.pptx`, `.pptm`): Vertical continuous slide cards with titles, bullet hierarchy, tables, embedded images, and toggleable speaker notes.
+- **PowerPoint** (`.pptx`, `.pptm`): Full 16:9 slide canvas rendering powered by `pptx-preview`, supporting continuous list / single-slide modes, shapes, tables, embedded images, charts, and speaker notes.
+- **PDF** (`.pdf`): Native streaming PDF rendering inside the Sidecar pane (supports text selection, search, outlines, and large files).
+- **HTML** (`.html`, `.htm`): Live webpage rendering with relative sibling CSS/JS/image asset resolution, **Preview / Source** toggle, and **Desktop / Tablet / Mobile** viewport presets.
+- **ZIP Archives** (`.zip`): File tree explorer with sizes, compression ratio, live filename filtering, and inline preview of text, code, and image entries.
 - **Markdown** (`.md`, `.markdown`): Rendered document preview.
 - **Auto-Preview & One-Click Chat Pills**:
   - Bundled `rules/AGENTS.md` automatically pushes generated or inspected local Office files to Office Viewer.

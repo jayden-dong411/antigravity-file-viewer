@@ -11,6 +11,9 @@ export const SUPPORTED_EXTENSIONS = new Set([
   '.xlsx', '.xls', '.xlsm', '.xlsb', '.csv', '.tsv', '.ods',
   '.pptx', '.pptm',
   '.md', '.markdown',
+  '.pdf',
+  '.html', '.htm',
+  '.zip',
 ]);
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MiB
@@ -172,6 +175,104 @@ async function parsePptx(buffer) {
   };
 }
 
+const TEXT_PREVIEW_EXTS = new Set([
+  '.txt', '.md', '.markdown', '.json', '.yaml', '.yml', '.xml', '.html', '.htm',
+  '.css', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.py', '.sh', '.bash',
+  '.zsh', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.hpp', '.sql', '.toml',
+  '.ini', '.env', '.csv', '.tsv', '.log', '.svg',
+]);
+
+async function parseZip(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const entries = [];
+  let totalSize = 0;
+  let totalCompressed = 0;
+
+  zip.forEach((relativePath, file) => {
+    const clean = relativePath.replace(/\/$/, '');
+    if (!clean) return;
+    // Skip macOS resource fork metadata clutter
+    if (clean.startsWith('__MACOSX/') || clean.endsWith('/.DS_Store') || clean === '.DS_Store') return;
+    const data = file._data || {};
+    const size = typeof data.uncompressedSize === 'number' ? data.uncompressedSize : 0;
+    const compressedSize = typeof data.compressedSize === 'number' ? data.compressedSize : 0;
+    if (!file.dir) {
+      totalSize += size;
+      totalCompressed += compressedSize;
+    }
+    entries.push({
+      path: relativePath,
+      name: path.posix.basename(clean),
+      dir: path.posix.dirname(clean) === '.' ? '' : path.posix.dirname(clean),
+      isDir: Boolean(file.dir),
+      ext: file.dir ? '' : path.posix.extname(clean).toLowerCase(),
+      size,
+      compressedSize,
+      date: file.date ? file.date.toISOString() : '',
+    });
+  });
+
+  entries.sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    return a.path.localeCompare(b.path);
+  });
+
+  return {
+    kind: 'zip',
+    entries,
+    fileCount: entries.filter((e) => !e.isDir).length,
+    dirCount: entries.filter((e) => e.isDir).length,
+    totalSize,
+    totalCompressed,
+  };
+}
+
+export async function loadZipEntry(filePath, entryPath) {
+  const resolved = expandPath(filePath);
+  const buffer = await fs.readFile(resolved);
+  return await loadZipEntryFromBuffer(buffer, entryPath);
+}
+
+export async function loadZipEntryFromBuffer(buffer, entryPath) {
+  const zip = await JSZip.loadAsync(buffer);
+  const file = zip.file(entryPath);
+  if (!file || file.dir) {
+    throw new Error(`Entry not found in archive: ${entryPath}`);
+  }
+  const ext = path.posix.extname(entryPath).toLowerCase();
+  const mime = mimeFromExt(entryPath);
+  const entryBuf = await file.async('nodebuffer');
+  if (entryBuf.length > 10 * 1024 * 1024) {
+    throw new Error(`Archive entry exceeds 10 MiB preview limit (${(entryBuf.length / 1024 / 1024).toFixed(1)} MiB)`);
+  }
+  if (mime && ext !== '.svg') {
+    return {
+      entryPath,
+      previewType: 'image',
+      size: entryBuf.length,
+      dataUrl: `data:${mime};base64,${entryBuf.toString('base64')}`,
+    };
+  }
+  if (TEXT_PREVIEW_EXTS.has(ext) || entryBuf.length < 256 * 1024) {
+    const sample = entryBuf.subarray(0, 4096);
+    const looksBinary = sample.includes(0);
+    if (!looksBinary) {
+      return {
+        entryPath,
+        previewType: 'text',
+        size: entryBuf.length,
+        text: entryBuf.toString('utf8').slice(0, 200_000),
+      };
+    }
+  }
+  return {
+    entryPath,
+    previewType: 'binary',
+    size: entryBuf.length,
+    message: `Binary file (${ext || 'unknown'}), ${(entryBuf.length / 1024).toFixed(1)} KB — preview not available.`,
+  };
+}
+
 export async function parseOfficeBuffer(buffer, fileName, options = {}) {
   const ext = path.extname(fileName).toLowerCase();
   if (ext === '.docx' || ext === '.dotx') {
@@ -187,7 +288,22 @@ export async function parseOfficeBuffer(buffer, fileName, options = {}) {
     const html = await marked.parse(buffer.toString('utf8'));
     return { kind: 'markdown', html };
   }
-  throw new Error(`Unsupported file format: ${ext || '(no extension)'}. Supported: .docx, .xlsx, .xls, .csv, .tsv, .ods, .pptx, .md`);
+  if (ext === '.pdf') {
+    return {
+      kind: 'pdf',
+      pdfBase64: options.includeBase64 ? buffer.toString('base64') : undefined,
+    };
+  }
+  if (ext === '.html' || ext === '.htm') {
+    return {
+      kind: 'html',
+      source: buffer.toString('utf8'),
+    };
+  }
+  if (ext === '.zip') {
+    return await parseZip(buffer);
+  }
+  throw new Error(`Unsupported file format: ${ext || '(no extension)'}. Supported: .docx, .xlsx, .xls, .csv, .tsv, .ods, .pptx, .md, .pdf, .html, .zip`);
 }
 
 export async function loadOfficeFile(filePath, options = {}) {

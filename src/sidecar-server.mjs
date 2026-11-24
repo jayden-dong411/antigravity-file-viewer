@@ -5,7 +5,10 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
   browseDirectory,
+  expandPath,
   loadOfficeFile,
+  loadZipEntry,
+  loadZipEntryFromBuffer,
   parseOfficeBuffer,
 } from './parsers.mjs';
 
@@ -100,6 +103,31 @@ function sendJson(res, status, data) {
   res.end(body);
 }
 
+const STATIC_MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.pdf': 'application/pdf',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+};
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -130,6 +158,52 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && pathname === '/api/raw') {
+      const target = url.searchParams.get('file') || '';
+      const resolved = expandPath(target);
+      const stat = await fs.stat(resolved);
+      if (!stat.isFile()) {
+        sendJson(res, 404, { error: 'Not a file' });
+        return;
+      }
+      const ext = path.extname(resolved).toLowerCase();
+      const buf = await fs.readFile(resolved);
+      res.writeHead(200, {
+        'Content-Type': STATIC_MIME[ext] || 'application/octet-stream',
+        'Content-Disposition': 'inline',
+        'Cache-Control': 'no-store',
+      });
+      res.end(buf);
+      return;
+    }
+
+    // Serve local HTML + sibling relative assets (CSS/JS/images) cleanly under /site/<base64url-dir>/<relpath>
+    if (req.method === 'GET' && pathname.startsWith('/site/')) {
+      const rest = pathname.slice('/site/'.length);
+      const slashIdx = rest.indexOf('/');
+      if (slashIdx <= 0) {
+        sendJson(res, 400, { error: 'Invalid site path' });
+        return;
+      }
+      const dirEncoded = rest.slice(0, slashIdx);
+      const relPath = decodeURIComponent(rest.slice(slashIdx + 1));
+      const baseDir = path.resolve(Buffer.from(dirEncoded, 'base64url').toString('utf8'));
+      const fullPath = path.resolve(baseDir, relPath);
+      const relCheck = path.relative(baseDir, fullPath);
+      if (relCheck.startsWith('..') || path.isAbsolute(relCheck)) {
+        sendJson(res, 403, { error: 'Path escapes base directory' });
+        return;
+      }
+      const buf = await fs.readFile(fullPath);
+      const ext = path.extname(fullPath).toLowerCase();
+      res.writeHead(200, {
+        'Content-Type': STATIC_MIME[ext] || 'application/octet-stream',
+        'Cache-Control': 'no-store',
+      });
+      res.end(buf);
+      return;
+    }
+
     if (req.method === 'GET' && pathname === '/api/state') {
       const recent = await readJsonSafe(RECENT_PATH, []);
       const active = await readJsonSafe(ACTIVE_PATH, null);
@@ -145,7 +219,11 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const data = await loadOfficeFile(body.filePath, { maxRows: body.maxRows });
       const recent = await addRecent(data);
-      sendJson(res, 200, { ...data, recent });
+      const siteUrl =
+        data.kind === 'html' && data.filePath
+          ? `/site/${Buffer.from(path.dirname(data.filePath), 'utf8').toString('base64url')}/${encodeURIComponent(path.basename(data.filePath))}`
+          : undefined;
+      sendJson(res, 200, { ...data, siteUrl, recent });
       return;
     }
 
@@ -153,7 +231,10 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const buffer = Buffer.from(String(body.base64 || ''), 'base64');
       const fileName = String(body.fileName || 'document');
-      const parsed = await parseOfficeBuffer(buffer, fileName, { maxRows: body.maxRows });
+      const parsed = await parseOfficeBuffer(buffer, fileName, {
+        maxRows: body.maxRows,
+        includeBase64: true,
+      });
       sendJson(res, 200, {
         filePath: '',
         fileName,
@@ -161,6 +242,15 @@ const server = http.createServer(async (req, res) => {
         size: buffer.length,
         ...parsed,
       });
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/zip-entry') {
+      const body = await readJsonBody(req);
+      const entry = body.base64
+        ? await loadZipEntryFromBuffer(Buffer.from(String(body.base64), 'base64'), String(body.entryPath || ''))
+        : await loadZipEntry(String(body.filePath || ''), String(body.entryPath || ''));
+      sendJson(res, 200, entry);
       return;
     }
 
