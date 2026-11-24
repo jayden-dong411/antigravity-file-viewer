@@ -136,12 +136,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         ui: {
           resourceUri: APP_URI,
         },
-        'com.google.antigravity/ui': {
-          entrypoints: [
-            { type: 'aux_pane', title: 'File Viewer' },
-            { type: 'global', title: 'File Viewer' },
-          ],
-        },
       },
     },
     {
