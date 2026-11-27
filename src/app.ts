@@ -4,6 +4,12 @@ import {
   applyHostStyleVariables,
 } from '@modelcontextprotocol/ext-apps';
 import { init as initPptxPreview } from 'pptx-preview';
+// @ts-expect-error vendored pdf.js ESM build
+import * as pdfjsLib from '../vendor/pdfjs/pdf.min.mjs';
+// @ts-expect-error vendored pdf.js worker ESM build
+import * as pdfjsWorker from '../vendor/pdfjs/pdf.worker.min.mjs';
+
+(globalThis as unknown as { pdfjsWorker?: unknown }).pdfjsWorker = pdfjsWorker;
 
 type SheetMerge = { sr: number; sc: number; er: number; ec: number };
 type SheetData = {
@@ -132,20 +138,8 @@ let pptxMountSeq = 0;
 let pdfMountSeq = 0;
 let cachedPdfKey = '';
 let cachedPdfBytes: Uint8Array | null = null;
-let pdfjsLibPromise: Promise<any> | null = null;
 let uploadedBlobUrl = '';
 let uploadedZipBase64 = '';
-
-async function getPdfJs() {
-  if (!pdfjsLibPromise) {
-    const modUrl = '/vendor/pdfjs/pdf.min.mjs';
-    pdfjsLibPromise = (new Function('u', 'return import(u)')(modUrl) as Promise<any>).then((lib) => {
-      lib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
-      return lib;
-    });
-  }
-  return await pdfjsLibPromise;
-}
 
 function setBlobUrl(b64?: string, mime = 'application/pdf'): string {
   if (uploadedBlobUrl) {
@@ -580,9 +574,6 @@ async function mountPdfPreview() {
       cachedPdfKey = key;
       cachedPdfBytes = new Uint8Array(buf);
     }
-
-    const pdfjsLib = await getPdfJs();
-    if (seq !== pdfMountSeq) return;
 
     const loadingTask = pdfjsLib.getDocument({ data: cachedPdfBytes.slice(0) });
     const pdf = await loadingTask.promise;
