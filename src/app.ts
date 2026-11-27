@@ -129,8 +129,23 @@ let pptxPreviewer: ReturnType<typeof initPptxPreview> | null = null;
 let cachedPptxKey = '';
 let cachedPptxBuf: ArrayBuffer | null = null;
 let pptxMountSeq = 0;
+let pdfMountSeq = 0;
+let cachedPdfKey = '';
+let cachedPdfBytes: Uint8Array | null = null;
+let pdfjsLibPromise: Promise<any> | null = null;
 let uploadedBlobUrl = '';
 let uploadedZipBase64 = '';
+
+async function getPdfJs() {
+  if (!pdfjsLibPromise) {
+    const modUrl = '/vendor/pdfjs/pdf.min.mjs';
+    pdfjsLibPromise = (new Function('u', 'return import(u)')(modUrl) as Promise<any>).then((lib) => {
+      lib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
+      return lib;
+    });
+  }
+  return await pdfjsLibPromise;
+}
 
 function setBlobUrl(b64?: string, mime = 'application/pdf'): string {
   if (uploadedBlobUrl) {
@@ -528,14 +543,96 @@ function renderPdf(doc: LoadedDoc): string {
   if (!IS_SIDECAR) {
     return `<div class="empty-inline">
       <p><strong>PDF preview requires the File Viewer Sidecar panel.</strong></p>
-      <p class="muted">MCP App iframes enforce a strict CSP that blocks nested PDF viewers. Open this file in the File Viewer sidecar tab for native PDF viewing.</p>
+      <p class="muted">Open this file in the File Viewer sidecar tab for native HiDPI PDF rendering.</p>
     </div>`;
   }
-  const src = doc.filePath
-    ? `/api/raw?file=${encodeURIComponent(doc.filePath)}`
-    : uploadedBlobUrl;
-  if (!src) return `<div class="empty-inline">Unable to load PDF stream.</div>`;
-  return `<div class="pdf-stage"><iframe class="pdf-frame" src="${esc(src)}" title="${esc(doc.fileName)}"></iframe></div>`;
+  return `
+    <div class="pdf-canvas-wrap">
+      <div id="pdf-pages" class="pdf-pages">
+        <div class="empty-inline">Rendering PDF pages...</div>
+      </div>
+    </div>
+    <div class="sheet-meta" id="pdf-meta">${esc(doc.fileName)} · ${fmtSize(doc.size)}</div>`;
+}
+
+async function mountPdfPreview() {
+  const seq = ++pdfMountSeq;
+  const doc = state.doc;
+  if (!IS_SIDECAR || !doc || doc.kind !== 'pdf') return;
+  const container = document.getElementById('pdf-pages');
+  const metaEl = document.getElementById('pdf-meta');
+  if (!container) return;
+
+  try {
+    const key = `${doc.filePath || doc.fileName}:${doc.size}`;
+    if (cachedPdfKey !== key || !cachedPdfBytes) {
+      let buf: ArrayBuffer;
+      if (doc.filePath) {
+        const resp = await fetch(`/api/raw?file=${encodeURIComponent(doc.filePath)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status} loading PDF`);
+        buf = await resp.arrayBuffer();
+      } else if (doc.pdfBase64) {
+        buf = base64ToArrayBuffer(doc.pdfBase64);
+      } else {
+        throw new Error('No PDF data available');
+      }
+      if (seq !== pdfMountSeq) return;
+      cachedPdfKey = key;
+      cachedPdfBytes = new Uint8Array(buf);
+    }
+
+    const pdfjsLib = await getPdfJs();
+    if (seq !== pdfMountSeq) return;
+
+    const loadingTask = pdfjsLib.getDocument({ data: cachedPdfBytes.slice(0) });
+    const pdf = await loadingTask.promise;
+    if (seq !== pdfMountSeq) return;
+
+    const numPages = pdf.numPages;
+    if (metaEl) metaEl.textContent = `${numPages} pages · ${fmtSize(doc.size)} · ${state.zoom}%`;
+
+    container.innerHTML = '';
+    const viewport = document.querySelector('.viewport') as HTMLElement | null;
+    const targetCssWidth = Math.round(Math.min(Math.max((viewport?.clientWidth || 860) - 56, 420), 880) * (state.zoom / 100));
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      if (seq !== pdfMountSeq) return;
+      const page = await pdf.getPage(pageNum);
+      if (seq !== pdfMountSeq) return;
+
+      const baseVp = page.getViewport({ scale: 1 });
+      const cssScale = targetCssWidth / baseVp.width;
+      const renderVp = page.getViewport({ scale: cssScale * dpr });
+
+      const card = document.createElement('div');
+      card.className = 'pdf-page-card';
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(renderVp.width);
+      canvas.height = Math.floor(renderVp.height);
+      canvas.style.width = `${Math.floor(baseVp.width * cssScale)}px`;
+      canvas.style.height = `${Math.floor(baseVp.height * cssScale)}px`;
+      canvas.style.display = 'block';
+
+      const badge = document.createElement('div');
+      badge.className = 'pdf-page-num';
+      badge.textContent = `${pageNum} / ${numPages}`;
+
+      card.appendChild(canvas);
+      card.appendChild(badge);
+      container.appendChild(card);
+
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        await page.render({ canvasContext: ctx, viewport: renderVp }).promise;
+      }
+    }
+  } catch (err) {
+    if (seq === pdfMountSeq) {
+      container.innerHTML = `<div class="banner error">PDF render error: ${esc(err instanceof Error ? err.message : String(err))}</div>`;
+    }
+  }
 }
 
 function renderHtmlDoc(doc: LoadedDoc): string {
@@ -945,7 +1042,7 @@ function render() {
                 }
                 ${doc.kind === 'pptx' && doc.notes && doc.notes.length > 0 ? `<button class="btn sm ${state.showNotes ? 'active' : ''}" id="notes-btn">${ICONS.notes}<span>Notes</span></button>` : ''}
                 ${
-                  doc.kind !== 'pdf' && doc.kind !== 'html' && doc.kind !== 'zip' && doc.kind !== 'media'
+                  doc.kind !== 'html' && doc.kind !== 'zip' && doc.kind !== 'media'
                     ? `<div class="seg-group">
                          <button class="seg-btn icon-only" id="zoom-out" title="Zoom out">${ICONS.minus}</button>
                          <span class="zoom-label">${state.zoom}%</span>
@@ -974,6 +1071,7 @@ function render() {
 
   bindEvents();
   void mountPptxPreview();
+  void mountPdfPreview();
 }
 
 function bindEvents() {

@@ -165,6 +165,22 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && pathname.startsWith('/vendor/pdfjs/')) {
+      const fileName = path.basename(pathname);
+      if (fileName !== 'pdf.min.mjs' && fileName !== 'pdf.worker.min.mjs') {
+        sendJson(res, 404, { error: 'Not found' });
+        return;
+      }
+      const fullPath = path.join(PLUGIN_ROOT, 'vendor', 'pdfjs', fileName);
+      const buf = await fs.readFile(fullPath);
+      res.writeHead(200, {
+        'Content-Type': 'application/javascript; charset=utf-8',
+        'Cache-Control': 'public, max-age=86400',
+      });
+      res.end(buf);
+      return;
+    }
+
     if (req.method === 'GET' && pathname === '/api/raw') {
       const target = url.searchParams.get('file') || '';
       const resolved = expandPath(target);

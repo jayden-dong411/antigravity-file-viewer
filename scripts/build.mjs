@@ -688,15 +688,40 @@ html, body {
   color: var(--fv-text-muted);
 }
 
-/* PDF & HTML iframes */
-.pdf-stage {
+/* PDF HiDPI canvas viewer (pdf.js) */
+.pdf-canvas-wrap {
   flex: 1;
-  display: flex;
   min-height: 0;
-  height: 100%;
+  overflow: auto;
   background: var(--fv-surface);
+  padding: 22px 18px 44px;
 }
-.pdf-frame { width: 100%; height: 100%; border: none; }
+.pdf-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.pdf-page-card {
+  position: relative;
+  background: #ffffff;
+  border-radius: var(--fv-radius-md);
+  border: 1px solid color-mix(in srgb, var(--fv-border) 85%, transparent);
+  box-shadow: var(--fv-shadow-md);
+  overflow: hidden;
+}
+.pdf-page-num {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
 .html-stage {
   flex: 1;
   display: flex;
